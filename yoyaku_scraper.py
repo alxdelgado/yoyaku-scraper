@@ -5,9 +5,12 @@ Uses curl-cffi to impersonate Chrome's TLS fingerprint, bypassing Cloudflare
 without any browser launches. Parsing is done with BeautifulSoup.
 
 Usage:
-  python3 yoyaku_scraper.py                          # default: Deep House + Techno + Tech House
-  python3 yoyaku_scraper.py "Techno" "Acid"          # any combination of styles
-  python3 yoyaku_scraper.py "Deep House"             # single style
+  python3 yoyaku_scraper.py                      # default: Deep House + Techno + Tech House
+  python3 yoyaku_scraper.py acid minimal         # single-word styles, space-separated
+  python3 yoyaku_scraper.py acid minimal tech house  # multi-word styles joined automatically
+
+  Style names are case-insensitive. Multi-word styles (e.g. "tech house", "deep house")
+  are recognised automatically — no quotes required.
 
 Algorithm (two-phase):
   Phase 1 — fetch all style pages in parallel, extract only release URLs.
@@ -35,6 +38,40 @@ from curl_cffi.requests import AsyncSession
 DEFAULT_STYLES = ["Deep House", "Techno", "Tech House"]
 BASE_URL = "https://yoyaku.io"
 CONCURRENCY = 10   # curl-cffi is lightweight — higher concurrency is safe
+
+# All style names available on yoyaku.io (title-cased canonical forms).
+KNOWN_STYLES = [
+    "Acid", "Ambient", "Breaks", "Chicago", "Deep House", "Detroit",
+    "Dub", "Dub Techno", "Electro", "Experimental", "House", "IDM",
+    "Jungle", "Minimal", "Minimal Techno", "Nu Disco", "Progressive House",
+    "Soul", "Tech House", "Techno",
+]
+_KNOWN_LOWER: dict[str, str] = {s.lower(): s for s in KNOWN_STYLES}
+
+
+def parse_styles(tokens: list[str]) -> list[str]:
+    """Greedily match CLI tokens to known multi-word style names, longest match first.
+
+    Allows passing styles without quotes, e.g.:
+        python3 yoyaku_scraper.py acid minimal tech house
+    where 'tech house' is resolved to the single style 'Tech House'.
+    Unrecognised tokens are title-cased and passed through as-is.
+    """
+    styles: list[str] = []
+    i = 0
+    while i < len(tokens):
+        matched: str | None = None
+        for length in range(len(tokens) - i, 0, -1):
+            candidate = " ".join(tokens[i : i + length]).lower()
+            if candidate in _KNOWN_LOWER:
+                matched = _KNOWN_LOWER[candidate]
+                i += length
+                break
+        if matched is None:
+            matched = tokens[i].title()
+            i += 1
+        styles.append(matched)
+    return styles
 
 
 @dataclass
@@ -196,7 +233,7 @@ async def main():
     )
     args = parser.parse_args()
 
-    required_styles = {s.title() for s in args.styles}
+    required_styles = set(parse_styles(args.styles))
     style_slugs = {style_to_slug(s): s for s in required_styles}
 
     print(f"Filtering for releases with ALL of: {sorted(required_styles)}")
