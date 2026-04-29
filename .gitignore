@@ -1,0 +1,5 @@
+yoyaku_results.json
+yoyaku_results.csv
+*.pyc
+__pycache__/
+.cf_session/
