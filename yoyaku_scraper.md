@@ -26,20 +26,18 @@ Returns releases tagged with **all three** of Deep House, Techno, and Tech House
 
 ### Custom styles
 
-Pass style names as space-separated words after the script name. Style names are case-insensitive. Multi-word styles (e.g. `tech house`, `deep house`) are recognised automatically — **no quotes required**.
+Pass any number of style names as arguments. Every style you list must be present on a release for it to appear in the results.
 
 ```bash
-python3 yoyaku_scraper.py acid minimal tech house
-python3 yoyaku_scraper.py deep house minimal
-python3 yoyaku_scraper.py house dub techno ambient
+python3 yoyaku_scraper.py "Techno" "Acid"
+python3 yoyaku_scraper.py "Deep House" "Minimal"
+python3 yoyaku_scraper.py "House" "Dub Techno" "Ambient"
 ```
-
-Every style you list must be present on a release for it to appear in the results.
 
 ### Single style
 
 ```bash
-python3 yoyaku_scraper.py techno
+python3 yoyaku_scraper.py "Techno"
 ```
 
 Returns all releases tagged Techno.
@@ -48,21 +46,19 @@ Returns all releases tagged Techno.
 
 ## Style names
 
-Style names map directly to the style pages on yoyaku.io (e.g. `deep house` → `yoyaku.io/style/deep-house/`). The script handles casing and multi-word joining automatically — just type them lowercase, space-separated:
+Style names map directly to the style pages on yoyaku.io (e.g. `Deep House` → `yoyaku.io/style/deep-house/`). The script converts them automatically — spacing and capitalisation are flexible:
 
-| You type | Style matched |
+| You type | Resolves to |
 |---|---|
-| `acid` | Acid |
-| `deep house` | Deep House |
-| `tech house` | Tech House |
-| `dub techno` | Dub Techno |
-| `minimal techno` | Minimal Techno |
-| `nu disco` | Nu Disco |
-| `progressive house` | Progressive House |
+| `Deep House` | `/style/deep-house/` |
+| `deep house` | `/style/deep-house/` |
+| `DEEP HOUSE` | `/style/deep-house/` |
+| `Tech House` | `/style/tech-house/` |
+| `Techno` | `/style/techno/` |
 
-Available styles on yoyaku.io:
+Any style that has a listing page on yoyaku.io can be used. Examples of valid style names:
 
-`acid` · `ambient` · `breaks` · `chicago` · `deep house` · `detroit` · `dub` · `dub techno` · `electro` · `experimental` · `house` · `idm` · `jungle` · `minimal` · `minimal techno` · `nu disco` · `progressive house` · `soul` · `tech house` · `techno`
+`Acid` · `Ambient` · `Breaks` · `Chicago` · `Deep House` · `Detroit` · `Dub` · `Dub Techno` · `Electro` · `Experimental` · `House` · `IDM` · `Jungle` · `Minimal` · `Minimal Techno` · `Nu Disco` · `Progressive House` · `Soul` · `Tech House` · `Techno`
 
 ---
 
