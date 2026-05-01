@@ -110,7 +110,7 @@ IMPERSONATE_BROWSER = "chrome120"
 
 ---
 
-## Task 4 — Cache Phase 1 soups to avoid re-fetching in Phase 2
+## Task 4 — Cache Phase 1 soups to avoid re-fetching in Phase 2 ✓ DONE
 
 **Severity:** Medium | **Category:** Performance
 
