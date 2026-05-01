@@ -187,7 +187,7 @@ Then replace `asyncio.Semaphore(CONCURRENCY)` with `asyncio.Semaphore(args.concu
 
 ---
 
-## Task 7 — Use `asyncio.as_completed` in Phase 1 result collection
+## Task 7 — Use `asyncio.as_completed` in Phase 1 result collection ✓ DONE
 
 **Severity:** Low | **Category:** Performance / Correctness
 

@@ -260,17 +260,20 @@ async def main():
         total_pages = sum(valid.values())
         print(f"\nPhase 1 — collecting URLs ({total_pages} pages, concurrency={CONCURRENCY})…")
 
-        all_tasks: list[tuple[str, asyncio.Task]] = []
-        for slug, count in valid.items():
-            for page_url in _page_urls(slug, count):
-                all_tasks.append((slug, asyncio.create_task(
-                    fetch_urls(session, page_url, sem)
-                )))
+        async def _fetch(slug: str, url: str) -> tuple[str, set[str]]:
+            return slug, await fetch_urls(session, url, sem)
+
+        all_coros = [
+            _fetch(slug, page_url)
+            for slug, count in valid.items()
+            for page_url in _page_urls(slug, count)
+        ]
 
         style_url_sets: dict[str, set[str]] = {s: set() for s in valid}
         done = 0
-        for slug, task in all_tasks:
-            style_url_sets[slug].update(await task)
+        for fut in asyncio.as_completed(all_coros):
+            slug, urls = await fut
+            style_url_sets[slug].update(urls)
             done += 1
             print(f"  [{done}/{total_pages}]", end="\r")
 
