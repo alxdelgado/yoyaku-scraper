@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YOYAKU // STYLE INTERSECTION ENGINE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & tokens ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:       #000000;
+      --green:       #00ff41;
+      --green-dim:   #008f11;
+      --green-ghost: #003b00;
+      --green-glow:  rgba(0, 255, 65, 0.18);
+      --green-glow2: rgba(0, 255, 65, 0.06);
+      --grey:        #1a1a1a;
+      --font:        'Share Tech Mono', 'Courier New', monospace;
+      --border:      1px solid var(--green-dim);
+      --radius:      2px;
+      --sidebar-w:   260px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--black);
+      color: var(--green);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.6;
+      overflow: hidden;
+    }
+
+    /* ── Digital rain canvas (depth-0) ──────────────────────────────────── */
+    #rain-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    /* ── Scanline overlay (depth-5) ─────────────────────────────────────── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0, 0, 0, 0.08) 3px,
+        rgba(0, 0, 0, 0.08) 4px
+      );
+      pointer-events: none;
+    }
+
+    /* ── App shell ──────────────────────────────────────────────────────── */
+    #app {
+      position: relative;
+      z-index: 10;
+      display: grid;
+      grid-template-rows: 52px 1fr;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      height: 100vh;
+      border: var(--border);
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    #header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 0 20px;
+      border-bottom: var(--border);
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(4px);
+    }
+
+    #header h1 {
+      font-size: 15px;
+      letter-spacing: 0.2em;
+      color: var(--green);
+      text-shadow: 0 0 12px var(--green);
+    }
+
+    #header h1 span {
+      color: var(--green-dim);
+    }
+
+    .header-meta {
+      font-size: 11px;
+      color: var(--green-dim);
+      letter-spacing: 0.1em;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green-dim);
+      margin-left: auto;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .status-dot.active {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    #sidebar {
+      border-right: var(--border);
+      background: rgba(0, 5, 0, 0.92);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+
+      /* leather/drape texture via layered shadows + noise */
+      box-shadow: inset -1px 0 0 var(--green-ghost), inset -4px 0 20px rgba(0,0,0,0.6);
+    }
+
+    .sidebar-section {
+      padding: 14px 16px;
+      border-bottom: var(--border);
+    }
+
+    .sidebar-label {
+      font-size: 10px;
+      letter-spacing: 0.25em;
+      color: var(--green-dim);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    /* style checkboxes */
+    .style-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+      max-height: 320px;
+      padding-right: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--green-ghost) transparent;
+    }
+
+    .style-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .style-item:hover {
+      border-color: var(--green-ghost);
+      background: var(--green-glow2);
+    }
+    .style-item.selected {
+      border-color: var(--green-dim);
+      background: var(--green-glow2);
+    }
+
+    /* LED indicator */
+    .led {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--green-ghost);
+      background: transparent;
+      flex-shrink: 0;
+      transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+    .style-item.selected .led {
+      background: var(--green);
+      border-color: var(--green);
+      box-shadow: 0 0 6px var(--green), 0 0 12px var(--green-glow);
+    }
+
+    .style-name {
+      font-size: 12px;
+      color: var(--green-dim);
+      letter-spacing: 0.05em;
+      transition: color 0.2s;
+    }
+    .style-item.selected .style-name { color: var(--green); }
+
+    /* select all / clear */
+    .style-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .style-controls button {
+      font-family: var(--font);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: var(--green-dim);
+      background: transparent;
+      border: 1px solid var(--green-ghost);
+      padding: 3px 8px;
+      cursor: pointer;
+      border-radius: var(--radius);
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .style-controls button:hover {
+      color: var(--green);
+      border-color: var(--green-dim);
+    }
+
+    /* concurrency input */
+    .concurrency-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .concurrency-row label {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      color: var(--green-dim);
+      white-space: nowrap;
+    }
+    #concurrency-input {
+      width: 56px;
+      background: var(--black);
+      border: var(--border);
+      color: var(--green);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 4px 8px;
+      text-align: center;
+      border-radius: var(--radius);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #concurrency-input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 8px var(--green-glow);
+    }
+
+    /* execute button */
+    #execute-btn {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      font-family: var(--font);
+      font-size: 12px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--black);
+      background: var(--green);
+      border: none;
+      cursor: pointer;
+      border-radius: var(--radius);
+      transition: background 0.2s, box-shadow 0.2s, opacity 0.2s;
+      box-shadow: 0 0 16px var(--green-glow), 0 0 4px var(--green);
+    }
+    #execute-btn:hover:not(:disabled) {
+      background: #33ff66;
+      box-shadow: 0 0 28px var(--green-glow), 0 0 8px var(--green);
+    }
+    #execute-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    #execute-btn.running {
+      animation: btn-pulse 1.5s infinite;
+    }
+    @keyframes btn-pulse {
+      0%, 100% { box-shadow: 0 0 16px var(--green-glow), 0 0 4px var(--green); }
+      50%       { box-shadow: 0 0 32px rgba(0,255,65,0.35), 0 0 12px var(--green); }
+    }
+
+    /* export buttons */
+    .export-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: var(--border);
+      margin-top: auto;
+    }
+    .export-btn {
+      flex: 1;
+      font-family: var(--font);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: var(--green-dim);
+      background: transparent;
+      border: 1px solid var(--green-ghost);
+      padding: 6px 4px;
+      cursor: pointer;
+      border-radius: var(--radius);
+      transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
+      text-align: center;
+    }
+    .export-btn:hover:not(:disabled) {
+      color: var(--green);
+      border-color: var(--green-dim);
+      box-shadow: 0 0 8px var(--green-glow2);
+    }
+    .export-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+    /* ── Main panel ──────────────────────────────────────────────────────── */
+    #main {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      overflow: hidden;
+    }
+
+    /* Terminal */
+    #terminal-wrap {
+      border-bottom: var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: rgba(0,3,0,0.88);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-bottom: var(--border);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: var(--green-dim);
+    }
+    .panel-header::before {
+      content: '//';
+      color: var(--green-ghost);
+    }
+
+    #terminal {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--green-dim);
+      scrollbar-width: thin;
+      scrollbar-color: var(--green-ghost) transparent;
+    }
+
+    .t-line { display: block; }
+    .t-line.hi   { color: var(--green); }
+    .t-line.warn { color: #ffcc00; }
+    .t-line.err  { color: #ff3a3a; }
+    .t-line.dim  { color: var(--green-ghost); }
+
+    /* blinking cursor */
+    .cursor::after {
+      content: '█';
+      animation: blink 1s step-end infinite;
+      color: var(--green);
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* Results panel */
+    #results-wrap {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: rgba(0,2,0,0.9);
+    }
+
+    #results-count {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--green-dim);
+    }
+
+    #results-table-wrap {
+      flex: 1;
+      overflow: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--green-ghost) transparent;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #010801;
+      color: var(--green-dim);
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      border-bottom: var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    thead th:hover { color: var(--green); }
+    thead th.sorted { color: var(--green); }
+    thead th.sorted::after { content: ' ↓'; }
+    thead th.sorted.asc::after { content: ' ↑'; }
+
+    tbody tr {
+      border-bottom: 1px solid var(--green-ghost);
+      transition: background 0.15s;
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    tbody tr.visible {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    tbody tr:hover { background: var(--green-glow2); }
+    tbody td {
+      padding: 7px 12px;
+      color: var(--green-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    tbody td:first-child { color: var(--green); }
+    tbody td a {
+      color: var(--green-dim);
+      text-decoration: none;
+    }
+    tbody td a:hover { color: var(--green); }
+
+    .empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--green-ghost);
+      letter-spacing: 0.2em;
+      font-size: 11px;
+    }
+
+    /* ── Glitch title animation ──────────────────────────────────────────── */
+    @keyframes glitch {
+      0%   { clip-path: inset(0 0 98% 0); transform: translate(-2px, 0); }
+      5%   { clip-path: inset(40% 0 50% 0); transform: translate(2px, 0); }
+      10%  { clip-path: inset(80% 0 10% 0); transform: translate(-1px, 0); }
+      15%  { clip-path: inset(0 0 98% 0); transform: translate(0); }
+      100% { clip-path: inset(0 0 98% 0); transform: translate(0); }
+    }
+    #header h1 {
+      position: relative;
+    }
+    #header h1::before,
+    #header h1::after {
+      content: attr(data-text);
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--green);
+      background: var(--black);
+    }
+    #header h1::before {
+      animation: glitch 4s infinite;
+      color: #00ffff;
+      opacity: 0.4;
+    }
+    #header h1::after {
+      animation: glitch 4s 0.1s infinite;
+      color: #ff003c;
+      opacity: 0.3;
+    }
+
+    /* ── Accessibility ───────────────────────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- depth-0: digital rain -->
+<canvas id="rain-canvas" aria-hidden="true"></canvas>
+
+<!-- depth-1..4: app shell -->
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <h1 data-text="YOYAKU // INTERSECTION">YOYAKU <span>//</span> INTERSECTION</h1>
+    <span class="header-meta">yoyaku.io &mdash; style filter engine</span>
+    <div class="status-dot" id="status-dot" title="Idle"></div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Select Styles</div>
+      <div class="style-controls">
+        <button id="select-all-btn">ALL</button>
+        <button id="clear-all-btn">CLEAR</button>
+      </div>
+      <div class="style-list" id="style-list" role="group" aria-label="Style selection">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Concurrency</div>
+      <div class="concurrency-row">
+        <label for="concurrency-input">-j</label>
+        <input id="concurrency-input" type="number" min="1" max="30" value="10" />
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <button id="execute-btn" disabled>[ EXECUTE ]</button>
+    </div>
+
+    <div class="export-row">
+      <button class="export-btn" id="export-json-btn" disabled>↓ JSON</button>
+      <button class="export-btn" id="export-csv-btn" disabled>↓ CSV</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main">
+
+    <!-- Terminal output -->
+    <div id="terminal-wrap">
+      <div class="panel-header">TERMINAL OUTPUT</div>
+      <div id="terminal" role="log" aria-live="polite" aria-label="Scraper output">
+        <span class="t-line dim">// select styles and press EXECUTE to begin</span>
+        <span class="t-line dim">// results will stream here in real-time</span>
+        <span class="t-line cursor" id="cursor-line">&nbsp;</span>
+      </div>
+    </div>
+
+    <!-- Results table -->
+    <div id="results-wrap">
+      <div class="panel-header">
+        RESULTS
+        <span id="results-count"></span>
+      </div>
+      <div id="results-table-wrap">
+        <div class="empty-state" id="empty-state">// awaiting execution</div>
+        <table id="results-table" style="display:none">
+          <thead>
+            <tr>
+              <th data-col="title">Title</th>
+              <th data-col="artists">Artists</th>
+              <th data-col="label">Label</th>
+              <th data-col="styles">Styles</th>
+              <th data-col="format">Format</th>
+              <th data-col="price">Price</th>
+              <th data-col="url">Link</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ── Config ────────────────────────────────────────────────────────────── */
+const API_BASE = 'http://localhost:8000';   // FastAPI endpoint (Phase A)
+const DEMO_MODE = true;                     // set false once backend is live
+
+const KNOWN_STYLES = [
+  "Acid","Ambient","Breaks","Chicago","Deep House","Detroit",
+  "Dub","Dub Techno","Electro","Experimental","House","IDM",
+  "Jungle","Minimal","Minimal Techno","Nu Disco","Progressive House",
+  "Soul","Tech House","Techno",
+];
+
+/* ── Digital Rain ──────────────────────────────────────────────────────── */
+(function initRain() {
+  const canvas = document.getElementById('rain-canvas');
+  const ctx    = canvas.getContext('2d');
+  const CHARS  = 'ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ01';
+  const COL_W  = 16;
+  let cols, drops;
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols  = Math.floor(canvas.width / COL_W);
+    drops = Array.from({ length: cols }, () => Math.random() * -50);
+  }
+
+  function draw() {
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < drops.length; i++) {
+      const char = CHARS[Math.floor(Math.random() * CHARS.length)];
+      const y    = drops[i] * COL_W;
+
+      // head char is bright; trail fades
+      ctx.fillStyle = y > 0 ? '#00ff41' : '#003b00';
+      ctx.font      = `${COL_W}px 'Share Tech Mono', monospace`;
+      ctx.fillText(char, i * COL_W, y);
+
+      if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i] += 0.5;
+    }
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+
+  // only animate when visible
+  let raf;
+  const observer = new IntersectionObserver(entries => {
+    entries[0].isIntersecting
+      ? (raf = setInterval(draw, 50))
+      : clearInterval(raf);
+  });
+  observer.observe(canvas);
+  raf = setInterval(draw, 50);
+})();
+
+/* ── Style selector ────────────────────────────────────────────────────── */
+const styleList     = document.getElementById('style-list');
+const executeBtn    = document.getElementById('execute-btn');
+const selectedStyles = new Set();
+
+KNOWN_STYLES.forEach(style => {
+  const item = document.createElement('div');
+  item.className = 'style-item';
+  item.setAttribute('role', 'checkbox');
+  item.setAttribute('aria-checked', 'false');
+  item.setAttribute('tabindex', '0');
+  item.dataset.style = style;
+  item.innerHTML = `<span class="led" aria-hidden="true"></span><span class="style-name">${style}</span>`;
+
+  function toggle() {
+    if (selectedStyles.has(style)) {
+      selectedStyles.delete(style);
+      item.classList.remove('selected');
+      item.setAttribute('aria-checked', 'false');
+    } else {
+      selectedStyles.add(style);
+      item.classList.add('selected');
+      item.setAttribute('aria-checked', 'true');
+    }
+    executeBtn.disabled = selectedStyles.size < 1;
+  }
+
+  item.addEventListener('click', toggle);
+  item.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } });
+  styleList.appendChild(item);
+});
+
+document.getElementById('select-all-btn').addEventListener('click', () => {
+  KNOWN_STYLES.forEach(s => {
+    selectedStyles.add(s);
+    styleList.querySelector(`[data-style="${s}"]`).classList.add('selected');
+    styleList.querySelector(`[data-style="${s}"]`).setAttribute('aria-checked', 'true');
+  });
+  executeBtn.disabled = false;
+});
+
+document.getElementById('clear-all-btn').addEventListener('click', () => {
+  selectedStyles.clear();
+  styleList.querySelectorAll('.style-item').forEach(el => {
+    el.classList.remove('selected');
+    el.setAttribute('aria-checked', 'false');
+  });
+  executeBtn.disabled = true;
+});
+
+/* ── Terminal helpers ──────────────────────────────────────────────────── */
+const terminal   = document.getElementById('terminal');
+const cursorLine = document.getElementById('cursor-line');
+
+function termPrint(text, cls = '') {
+  const line = document.createElement('span');
+  line.className = `t-line ${cls}`.trim();
+  line.textContent = text;
+  terminal.insertBefore(line, cursorLine);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function termClear() {
+  terminal.querySelectorAll('.t-line:not(#cursor-line)').forEach(el => el.remove());
+}
+
+/* ── Results table ─────────────────────────────────────────────────────── */
+let currentResults = [];
+let sortCol   = 'title';
+let sortAsc   = true;
+
+function renderResults(data) {
+  currentResults = data;
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = '';
+
+  document.getElementById('empty-state').style.display  = 'none';
+  document.getElementById('results-table').style.display = '';
+  document.getElementById('results-count').textContent   = `// ${data.length} release(s)`;
+  document.getElementById('export-json-btn').disabled    = false;
+  document.getElementById('export-csv-btn').disabled     = false;
+
+  data.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td title="${r.title}">${r.title}</td>
+      <td title="${r.artists}">${r.artists}</td>
+      <td title="${r.label}">${r.label}</td>
+      <td title="${r.styles}">${r.styles}</td>
+      <td>${r.format}</td>
+      <td>${r.price}</td>
+      <td><a href="${r.url}" target="_blank" rel="noopener" title="${r.url}">↗</a></td>
+    `;
+    tbody.appendChild(tr);
+    // staggered cascade reveal
+    setTimeout(() => tr.classList.add('visible'), i * 40);
+  });
+}
+
+// Sortable columns
+document.querySelectorAll('thead th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) sortAsc = !sortAsc;
+    else { sortCol = col; sortAsc = true; }
+
+    document.querySelectorAll('thead th').forEach(t => {
+      t.classList.remove('sorted', 'asc');
+    });
+    th.classList.add('sorted');
+    if (sortAsc) th.classList.add('asc');
+
+    const sorted = [...currentResults].sort((a, b) => {
+      const va = (a[col] || '').toLowerCase();
+      const vb = (b[col] || '').toLowerCase();
+      return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+    renderResults(sorted);
+  });
+});
+
+/* ── Execute ───────────────────────────────────────────────────────────── */
+const statusDot = document.getElementById('status-dot');
+
+async function runScraper() {
+  const styles      = [...selectedStyles];
+  const concurrency = parseInt(document.getElementById('concurrency-input').value, 10) || 10;
+
+  termClear();
+  executeBtn.disabled = true;
+  executeBtn.textContent = '[ RUNNING ]';
+  executeBtn.classList.add('running');
+  statusDot.classList.add('active');
+
+  if (DEMO_MODE) {
+    await runDemo(styles, concurrency);
+  } else {
+    await runLive(styles, concurrency);
+  }
+
+  executeBtn.disabled = false;
+  executeBtn.textContent = '[ EXECUTE ]';
+  executeBtn.classList.remove('running');
+  statusDot.classList.remove('active');
+}
+
+/* Demo mode — simulates a real scraper run for design preview */
+async function runDemo(styles, concurrency) {
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  termPrint(`> Filtering for releases with ALL of: [${styles.join(', ')}]`, 'hi');
+  await delay(400);
+  termPrint('');
+  termPrint('> Probing page counts…');
+  await delay(300);
+
+  for (const s of styles) {
+    const pages = Math.floor(Math.random() * 8) + 1;
+    termPrint(`>   ${s}: ${pages} page(s)`);
+    await delay(120);
+  }
+
+  await delay(300);
+  const totalPages = styles.length * 4;
+  termPrint('');
+  termPrint(`> Phase 1 — collecting URLs (${totalPages} pages, concurrency=${concurrency})…`);
+  for (let i = 1; i <= totalPages; i++) {
+    termPrint(`>   [${i}/${totalPages}]`);
+    await delay(80);
+  }
+
+  termPrint('');
+  termPrint(`>   URLs per style: { ${styles.map(s => `${s}: ${Math.floor(Math.random()*80)+20}`).join(', ')} }`);
+  await delay(300);
+
+  const count = Math.floor(Math.random() * 6) + 1;
+  termPrint(`>   Intersection: ${count} release(s)`, 'hi');
+  await delay(300);
+  termPrint('');
+  termPrint(`> Phase 2 — parsing ${count} matching cards…`);
+  await delay(500);
+  termPrint('');
+  termPrint(`> ${'═'.repeat(40)}`, 'dim');
+  termPrint(`> Total unique matching releases: ${count}`, 'hi');
+
+  const demoResults = Array.from({ length: count }, (_, i) => ({
+    title:   `Release ${String.fromCharCode(65 + i)} — ${styles[0]} Edition`,
+    url:     `https://yoyaku.io/style/${styles[0].toLowerCase().replace(/\s+/g, '-')}/`,
+    artists: i % 2 === 0 ? 'Artist Alpha' : 'Artist Beta, Artist Gamma',
+    label:   ['Tresor', 'Ostgut Ton', 'Mule Musiq', 'Compost'][i % 4],
+    sku:     `SKU-${1000 + i}`,
+    styles:  styles.slice(0, 2).join(', '),
+    format:  ['12"', '2x12"', '10"'][i % 3],
+    price:   `€${(10 + i * 2.5).toFixed(2)}`,
+  }));
+
+  renderResults(demoResults);
+  termPrint(`> Saved: yoyaku_results.json`, 'dim');
+  termPrint(`> Saved: yoyaku_results.csv`, 'dim');
+}
+
+/* Live mode — connects to FastAPI backend (Phase A) */
+async function runLive(styles, concurrency) {
+  try {
+    const res = await fetch(`${API_BASE}/scrape`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ styles, concurrency }),
+    });
+    if (!res.ok) { termPrint(`> [error] HTTP ${res.status}`, 'err'); return; }
+    const { job_id } = await res.json();
+
+    const evtSource = new EventSource(`${API_BASE}/stream/${job_id}`);
+    evtSource.onmessage = e => {
+      const { type, text } = JSON.parse(e.data);
+      termPrint(`> ${text}`, type === 'error' ? 'err' : type === 'hi' ? 'hi' : '');
+    };
+    evtSource.addEventListener('done', async () => {
+      evtSource.close();
+      const r = await fetch(`${API_BASE}/results/${job_id}`);
+      renderResults(await r.json());
+    });
+    evtSource.onerror = () => {
+      termPrint('> [error] connection lost', 'err');
+      evtSource.close();
+    };
+  } catch (err) {
+    termPrint(`> [error] ${err.message}`, 'err');
+  }
+}
+
+executeBtn.addEventListener('click', runScraper);
+
+/* ── Export ────────────────────────────────────────────────────────────── */
+document.getElementById('export-json-btn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(currentResults, null, 2)], { type: 'application/json' });
+  triggerDownload(blob, 'yoyaku_results.json');
+});
+
+document.getElementById('export-csv-btn').addEventListener('click', () => {
+  if (!currentResults.length) return;
+  const keys = Object.keys(currentResults[0]).filter(k => k !== 'url');
+  const rows = [keys.join(','), ...currentResults.map(r =>
+    keys.map(k => `"${(r[k] || '').replace(/"/g, '""')}"`).join(',')
+  )];
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  triggerDownload(blob, 'yoyaku_results.csv');
+});
+
+function triggerDownload(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>
