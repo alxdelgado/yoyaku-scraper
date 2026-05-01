@@ -45,6 +45,20 @@ DEFAULT_STYLES = ["Deep House", "Techno", "Tech House"]
 BASE_URL = "https://yoyaku.io"
 CONCURRENCY = 10   # default; override with --concurrency / -j at runtime
 
+# ── Selectors & sentinels ────────────────────────────────────────────────────
+# Centralised here so a yoyaku.io markup change requires edits in one place.
+SEL_PRODUCT_LINK    = "a.woocommerce-LoopProduct-link"
+SEL_PRODUCT_CARD    = "li.product"
+SEL_ARTISTS         = "p.product-artists a"
+SEL_SKU             = "p.product-labels .product-sku"
+SEL_LABEL_NAME      = "p.product-labels .product-label-name a"
+SEL_FEATURES        = "p.product-features"
+SEL_STYLE_LINK      = "a[href*='/style/']"
+SEL_PRICE           = "span.price .woocommerce-Price-amount"
+SEL_PAGE_NUMBERS    = ".page-numbers[href]"
+CF_CHALLENGE_TITLE  = "just a moment"   # Cloudflare interstitial page title
+IMPERSONATE_BROWSER = "chrome120"       # curl-cffi TLS fingerprint target
+
 # All style names available on yoyaku.io (title-cased canonical forms).
 KNOWN_STYLES = [
     "Acid", "Ambient", "Breaks", "Chicago", "Deep House", "Detroit",
@@ -136,7 +150,7 @@ async def get_soup(
 
     soup = BeautifulSoup(r.text, "lxml")
     title = soup.title.string if soup.title else ""
-    if "just a moment" in title.lower():
+    if CF_CHALLENGE_TITLE in title.lower():
         print(f"  [CF] {url}", file=sys.stderr)
         return None
 
@@ -158,7 +172,7 @@ async def probe_style(
     soup = await get_soup(session, f"{BASE_URL}/style/{slug}/", sem)
     if soup is None:
         return 0
-    page_links = soup.select(".page-numbers[href]")
+    page_links = soup.select(SEL_PAGE_NUMBERS)
     nums = [
         int(m.group(1))
         for a in page_links
@@ -184,7 +198,7 @@ async def fetch_urls(
         return set(), None
     return {
         a["href"]
-        for a in soup.select("a.woocommerce-LoopProduct-link")
+        for a in soup.select(SEL_PRODUCT_LINK)
         if a.get("href")
     }, soup
 
@@ -197,7 +211,7 @@ def _parse_card(card, keep_urls: set[str]) -> Release | None:
     Does not mutate the card's soup tree — the feat subtree is deep-copied
     before any decompose calls so cached soups remain intact across calls.
     """
-    link = card.select_one("a.woocommerce-LoopProduct-link")
+    link = card.select_one(SEL_PRODUCT_LINK)
     if not link or link.get("href") not in keep_urls:
         return None
 
@@ -205,25 +219,25 @@ def _parse_card(card, keep_urls: set[str]) -> Release | None:
     title = _text(link)
 
     artists = ", ".join(
-        _text(a) for a in card.select("p.product-artists a")
+        _text(a) for a in card.select(SEL_ARTISTS)
     )
-    sku = _text(card.select_one("p.product-labels .product-sku"))
+    sku = _text(card.select_one(SEL_SKU))
     label = ", ".join(
-        _text(a) for a in card.select("p.product-labels .product-label-name a")
+        _text(a) for a in card.select(SEL_LABEL_NAME)
     )
 
-    feat = card.select_one("p.product-features")
+    feat = card.select_one(SEL_FEATURES)
     styles_list: list[str] = []
     fmt = ""
     if feat:
-        styles_list = [_text(a) for a in feat.select("a[href*='/style/']")]
+        styles_list = [_text(a) for a in feat.select(SEL_STYLE_LINK)]
         # Deep-copy the subtree before decomposing so the cached soup is not mutated.
         feat_copy = copy.deepcopy(feat)
-        for a in feat_copy.select("a[href*='/style/']"):
+        for a in feat_copy.select(SEL_STYLE_LINK):
             a.decompose()
         fmt = re.sub(r"[|\s]+", " ", _text(feat_copy)).strip(" |")
 
-    price = _text(card.select_one("span.price .woocommerce-Price-amount"))
+    price = _text(card.select_one(SEL_PRICE))
 
     return Release(
         title=title, url=card_url, artists=artists, label=label,
@@ -249,7 +263,7 @@ async def fetch_cards(
     if soup is None:
         return []
     results = []
-    for card in soup.select("li.product"):
+    for card in soup.select(SEL_PRODUCT_CARD):
         release = _parse_card(card, keep_urls)
         if release:
             results.append(release)
@@ -402,7 +416,7 @@ async def main():
 
     sem = asyncio.Semaphore(args.concurrency)
 
-    async with AsyncSession(impersonate="chrome120") as session:
+    async with AsyncSession(impersonate=IMPERSONATE_BROWSER) as session:
         valid = await probe_all_styles(session, style_slugs, sem)
         if not valid:
             print("No styles could be loaded.")

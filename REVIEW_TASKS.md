@@ -71,7 +71,7 @@ assert style_to_slug("IDM")        == "idm"
 
 ---
 
-## Task 3 — Promote CSS selectors and sentinel strings to named constants
+## Task 3 — Promote CSS selectors and sentinel strings to named constants ✓ DONE
 
 **Severity:** Medium | **Category:** Maintainability
 
