@@ -134,7 +134,7 @@ async def fetch_cards(session, url, sem, keep_urls) -> list[Release]:
 
 ---
 
-## Task 5 — Break `main()` into focused helper functions
+## Task 5 — Break `main()` into focused helper functions ✓ DONE
 
 **Severity:** Medium | **Category:** Maintainability
 

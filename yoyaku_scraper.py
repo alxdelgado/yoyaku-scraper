@@ -218,6 +218,99 @@ async def fetch_cards(
     return results
 
 
+# ── Orchestration helpers ────────────────────────────────────────────────────
+
+async def probe_all_styles(
+    session: AsyncSession,
+    style_slugs: dict[str, str],
+    sem: asyncio.Semaphore,
+) -> dict[str, int]:
+    """Probe each style for its page count; return {slug: count} for reachable styles only."""
+    print("\nProbing page counts…")
+    results = await asyncio.gather(*[
+        probe_style(session, slug, sem) for slug in style_slugs
+    ])
+    page_counts = dict(zip(style_slugs, results))
+    for slug, label in style_slugs.items():
+        print(f"  {label}: {page_counts[slug]} page(s)")
+    return {slug: count for slug, count in page_counts.items() if count > 0}
+
+
+async def phase1_collect_urls(
+    session: AsyncSession,
+    valid: dict[str, int],
+    style_slugs: dict[str, str],
+    sem: asyncio.Semaphore,
+) -> dict[str, set[str]]:
+    """Fetch all style pages in parallel and collect release URLs per slug."""
+    total_pages = sum(valid.values())
+    print(f"\nPhase 1 — collecting URLs ({total_pages} pages, concurrency={CONCURRENCY})…")
+
+    async def _fetch(slug: str, url: str) -> tuple[str, set[str]]:
+        return slug, await fetch_urls(session, url, sem)
+
+    all_coros = [
+        _fetch(slug, page_url)
+        for slug, count in valid.items()
+        for page_url in _page_urls(slug, count)
+    ]
+
+    style_url_sets: dict[str, set[str]] = {s: set() for s in valid}
+    done = 0
+    for fut in asyncio.as_completed(all_coros):
+        slug, urls = await fut
+        style_url_sets[slug].update(urls)
+        done += 1
+        print(f"  [{done}/{total_pages}]", end="\r")
+
+    print(f"\n  URLs per style: { {style_slugs[s]: len(v) for s, v in style_url_sets.items()} }")
+    return style_url_sets
+
+
+async def phase2_parse_cards(
+    session: AsyncSession,
+    smallest_slug: str,
+    page_count: int,
+    intersection: set[str],
+    sem: asyncio.Semaphore,
+) -> list[Release]:
+    """Fetch and parse product cards for the smallest style, filtered to the URL intersection."""
+    print(f"\nPhase 2 — parsing {len(intersection)} matching cards…")
+    card_tasks = [
+        asyncio.create_task(fetch_cards(session, url, sem, intersection))
+        for url in _page_urls(smallest_slug, page_count)
+    ]
+
+    results: list[Release] = []
+    seen: set[str] = set()
+    for task in asyncio.as_completed(card_tasks):
+        for r in await task:
+            if r.url not in seen:
+                seen.add(r.url)
+                results.append(r)
+    return results
+
+
+def write_output(results: list[Release]) -> None:
+    """Print a summary to stdout and write yoyaku_results.json and yoyaku_results.csv."""
+    print(f"\n{'='*60}")
+    print(f"Total unique matching releases: {len(results)}")
+    for r in results:
+        print(f"  {r.title}  [{r.styles}]  {r.price}")
+
+    with open("yoyaku_results.json", "w", encoding="utf-8") as f:
+        json.dump([asdict(r) for r in results], f, ensure_ascii=False, indent=2)
+    print("\nSaved: yoyaku_results.json")
+
+    if results:
+        fields = list(asdict(results[0]).keys())
+        with open("yoyaku_results.csv", "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerows(asdict(r) for r in results)
+        print("Saved: yoyaku_results.csv")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 async def main():
@@ -240,45 +333,13 @@ async def main():
     sem = asyncio.Semaphore(CONCURRENCY)
 
     async with AsyncSession(impersonate="chrome120") as session:
-
-        # ── Step 1: probe all styles in parallel ──────────────────────────
-        print("\nProbing page counts…")
-        probe_results = await asyncio.gather(*[
-            probe_style(session, slug, sem) for slug in style_slugs
-        ])
-        page_counts = dict(zip(style_slugs, probe_results))
-        for slug, label in style_slugs.items():
-            print(f"  {label}: {page_counts[slug]} page(s)")
-
-        valid = {s: c for s, c in page_counts.items() if c > 0}
+        valid = await probe_all_styles(session, style_slugs, sem)
         if not valid:
             print("No styles could be loaded.")
             return
 
-        # ── Step 2: collect URLs for all styles simultaneously ────────────
-        total_pages = sum(valid.values())
-        print(f"\nPhase 1 — collecting URLs ({total_pages} pages, concurrency={CONCURRENCY})…")
+        style_url_sets = await phase1_collect_urls(session, valid, style_slugs, sem)
 
-        async def _fetch(slug: str, url: str) -> tuple[str, set[str]]:
-            return slug, await fetch_urls(session, url, sem)
-
-        all_coros = [
-            _fetch(slug, page_url)
-            for slug, count in valid.items()
-            for page_url in _page_urls(slug, count)
-        ]
-
-        style_url_sets: dict[str, set[str]] = {s: set() for s in valid}
-        done = 0
-        for fut in asyncio.as_completed(all_coros):
-            slug, urls = await fut
-            style_url_sets[slug].update(urls)
-            done += 1
-            print(f"  [{done}/{total_pages}]", end="\r")
-
-        print(f"\n  URLs per style: { {style_slugs[s]: len(v) for s, v in style_url_sets.items()} }")
-
-        # ── Step 3: intersect URL sets (smallest-first) ───────────────────
         sorted_sets = sorted(style_url_sets.values(), key=len)
         intersection: set[str] = sorted_sets[0].copy()
         for s in sorted_sets[1:]:
@@ -291,40 +352,13 @@ async def main():
             print("No releases match all specified styles.")
             return
 
-        # ── Step 4: full card parse — smallest style, targeted pages ──────
         smallest_slug = min(valid, key=lambda s: valid[s])
-        print(f"\nPhase 2 — parsing {len(intersection)} matching cards…")
-        card_tasks = [
-            asyncio.create_task(fetch_cards(session, url, sem, intersection))
-            for url in _page_urls(smallest_slug, valid[smallest_slug])
-        ]
-
-        all_results: list[Release] = []
-        seen: set[str] = set()
-        for task in asyncio.as_completed(card_tasks):
-            for r in await task:
-                if r.url not in seen:
-                    seen.add(r.url)
-                    all_results.append(r)
+        all_results = await phase2_parse_cards(
+            session, smallest_slug, valid[smallest_slug], intersection, sem
+        )
 
     all_results.sort(key=lambda r: r.title.lower())
-
-    print(f"\n{'='*60}")
-    print(f"Total unique matching releases: {len(all_results)}")
-    for r in all_results:
-        print(f"  {r.title}  [{r.styles}]  {r.price}")
-
-    with open("yoyaku_results.json", "w", encoding="utf-8") as f:
-        json.dump([asdict(r) for r in all_results], f, ensure_ascii=False, indent=2)
-    print("\nSaved: yoyaku_results.json")
-
-    if all_results:
-        fields = list(asdict(all_results[0]).keys())
-        with open("yoyaku_results.csv", "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=fields)
-            w.writeheader()
-            w.writerows(asdict(r) for r in all_results)
-        print("Saved: yoyaku_results.csv")
+    write_output(all_results)
 
 
 if __name__ == "__main__":
