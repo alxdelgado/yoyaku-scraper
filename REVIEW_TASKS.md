@@ -38,7 +38,7 @@ if feat:
 
 ---
 
-## Task 2 — Add unit tests for pure functions
+## Task 2 — Add unit tests for pure functions ✓ DONE
 
 **Severity:** High | **Category:** Testing
 
