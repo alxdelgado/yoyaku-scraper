@@ -37,6 +37,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass, asdict
+from typing import Callable
 
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
@@ -58,6 +59,10 @@ SEL_PRICE           = "span.price .woocommerce-Price-amount"
 SEL_PAGE_NUMBERS    = ".page-numbers[href]"
 CF_CHALLENGE_TITLE  = "just a moment"   # Cloudflare interstitial page title
 IMPERSONATE_BROWSER = "chrome120"       # curl-cffi TLS fingerprint target
+
+
+def _cli_log(text: str, msg_type: str = "") -> None:
+    print(text)
 
 # All style names available on yoyaku.io (title-cased canonical forms).
 KNOWN_STYLES = [
@@ -276,15 +281,16 @@ async def probe_all_styles(
     session: AsyncSession,
     style_slugs: dict[str, str],
     sem: asyncio.Semaphore,
+    log_fn: Callable[..., None] = _cli_log,
 ) -> dict[str, int]:
     """Probe each style for its page count; return {slug: count} for reachable styles only."""
-    print("\nProbing page counts…")
+    log_fn("Probing page counts—")
     results = await asyncio.gather(*[
         probe_style(session, slug, sem) for slug in style_slugs
     ])
     page_counts = dict(zip(style_slugs, results))
     for slug, label in style_slugs.items():
-        print(f"  {label}: {page_counts[slug]} page(s)")
+        log_fn(f"  {label}: {page_counts[slug]} page(s)")
     return {slug: count for slug, count in page_counts.items() if count > 0}
 
 
@@ -295,6 +301,7 @@ async def phase1_collect_urls(
     sem: asyncio.Semaphore,
     cache_slug: str | None = None,
     concurrency: int = CONCURRENCY,
+    log_fn: Callable[..., None] = _cli_log,
 ) -> tuple[dict[str, set[str]], dict[str, BeautifulSoup]]:
     """Fetch all style pages in parallel and collect release URLs per slug.
 
@@ -304,7 +311,7 @@ async def phase1_collect_urls(
     enforced by sem, which the caller constructs.
     """
     total_pages = sum(valid.values())
-    print(f"\nPhase 1 — collecting URLs ({total_pages} pages, concurrency={concurrency})…")
+    log_fn(f"Phase 1 — collecting URLs ({total_pages} pages, concurrency={concurrency})…")
 
     async def _fetch(slug: str, url: str) -> tuple[str, str, set[str], BeautifulSoup | None]:
         # Returns (slug, page_url, release_urls, soup).
@@ -328,9 +335,9 @@ async def phase1_collect_urls(
         if soup is not None:
             page_soups[page_url] = soup
         done += 1
-        print(f"  [{done}/{total_pages}]", end="\r")
+        log_fn(f"  [{done}/{total_pages}]")
 
-    print(f"\n  URLs per style: { {style_slugs[s]: len(v) for s, v in style_url_sets.items()} }")
+    log_fn(f"  URLs per style: { {style_slugs[s]: len(v) for s, v in style_url_sets.items()} }")
     return style_url_sets, page_soups
 
 
@@ -341,6 +348,7 @@ async def phase2_parse_cards(
     intersection: set[str],
     sem: asyncio.Semaphore,
     cached_soups: dict[str, BeautifulSoup] | None = None,
+    log_fn: Callable[..., None] = _cli_log,
 ) -> list[Release]:
     """Fetch and parse product cards for the smallest style, filtered to the URL intersection.
 
@@ -349,7 +357,7 @@ async def phase2_parse_cards(
     have already passed the Cloudflare challenge check in get_soup and do not
     need re-validation here.
     """
-    print(f"\nPhase 2 — parsing {len(intersection)} matching cards…")
+    log_fn(f"Phase 2 — parsing {len(intersection)} matching cards…")
     card_tasks = [
         asyncio.create_task(
             fetch_cards(session, url, sem, intersection,
@@ -388,6 +396,61 @@ def write_output(results: list[Release]) -> None:
         print("Saved: yoyaku_results.csv")
 
 
+# ── Programmatic entry point ──────────────────────────────────────────────────
+
+async def run_scraper(
+    styles: list[str],
+    concurrency: int = CONCURRENCY,
+    log_fn: Callable[..., None] = _cli_log,
+) -> list[Release]:
+    """Run the full scrape pipeline and return results.
+
+    Suitable for embedding in a web API. log_fn(text, type) is called for every
+    log line; type is "hi" (highlight), "err" (error), or "" (neutral). The CLI
+    default (_cli_log) ignores type and just prints.
+    """
+    required_styles = set(styles)
+    style_slugs = {style_to_slug(s): s for s in required_styles}
+
+    log_fn(f"Filtering for releases with ALL of: {sorted(required_styles)}", "hi")
+
+    sem = asyncio.Semaphore(concurrency)
+    async with AsyncSession(impersonate=IMPERSONATE_BROWSER) as session:
+        valid = await probe_all_styles(session, style_slugs, sem, log_fn=log_fn)
+        if not valid:
+            log_fn("No styles could be loaded.", "err")
+            return []
+
+        smallest_slug = min(valid, key=lambda s: valid[s])
+        style_url_sets, page_soups = await phase1_collect_urls(
+            session, valid, style_slugs, sem,
+            cache_slug=smallest_slug,
+            concurrency=concurrency,
+            log_fn=log_fn,
+        )
+
+        sorted_sets = sorted(style_url_sets.values(), key=len)
+        intersection: set[str] = sorted_sets[0].copy()
+        for s in sorted_sets[1:]:
+            intersection &= s
+            if not intersection:
+                break
+
+        log_fn(f"  Intersection: {len(intersection)} release(s)", "hi")
+        if not intersection:
+            log_fn("No releases match all specified styles.")
+            return []
+
+        all_results = await phase2_parse_cards(
+            session, smallest_slug, valid[smallest_slug], intersection, sem,
+            cached_soups=page_soups,
+            log_fn=log_fn,
+        )
+
+    all_results.sort(key=lambda r: r.title.lower())
+    return all_results
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 async def main():
@@ -408,48 +471,9 @@ async def main():
         help=f"Max concurrent HTTP requests (default: {CONCURRENCY})",
     )
     args = parser.parse_args()
-
-    required_styles = set(parse_styles(args.styles))
-    style_slugs = {style_to_slug(s): s for s in required_styles}
-
-    print(f"Filtering for releases with ALL of: {sorted(required_styles)}")
-
-    sem = asyncio.Semaphore(args.concurrency)
-
-    async with AsyncSession(impersonate=IMPERSONATE_BROWSER) as session:
-        valid = await probe_all_styles(session, style_slugs, sem)
-        if not valid:
-            print("No styles could be loaded.")
-            return
-
-        # Determined from page counts (available after probing) rather than URL
-        # counts so we can tell Phase 1 which style's soups to cache upfront.
-        smallest_slug = min(valid, key=lambda s: valid[s])
-        style_url_sets, page_soups = await phase1_collect_urls(
-            session, valid, style_slugs, sem,
-            cache_slug=smallest_slug,
-            concurrency=args.concurrency,
-        )
-
-        sorted_sets = sorted(style_url_sets.values(), key=len)
-        intersection: set[str] = sorted_sets[0].copy()
-        for s in sorted_sets[1:]:
-            intersection &= s
-            if not intersection:
-                break
-
-        print(f"  Intersection: {len(intersection)} release(s)")
-        if not intersection:
-            print("No releases match all specified styles.")
-            return
-
-        all_results = await phase2_parse_cards(
-            session, smallest_slug, valid[smallest_slug], intersection, sem,
-            cached_soups=page_soups,
-        )
-
-    all_results.sort(key=lambda r: r.title.lower())
-    write_output(all_results)
+    styles = list(set(parse_styles(args.styles)))
+    results = await run_scraper(styles, concurrency=args.concurrency)
+    write_output(results)
 
 
 if __name__ == "__main__":
