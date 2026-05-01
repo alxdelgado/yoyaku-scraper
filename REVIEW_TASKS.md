@@ -6,7 +6,7 @@ Reviewer: Code Reviewer (engineering-team)
 
 ---
 
-## Task 1 — Fix style-text stripping in `_parse_card`
+## Task 1 — Fix style-text stripping in `_parse_card` ✓ DONE
 
 **Severity:** Medium | **Category:** Correctness
 

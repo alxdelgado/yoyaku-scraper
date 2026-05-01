@@ -189,10 +189,9 @@ def _parse_card(card, keep_urls: set[str]) -> Release | None:
     fmt = ""
     if feat:
         styles_list = [_text(a) for a in feat.select("a[href*='/style/']")]
-        full_text = _text(feat)
-        for s in styles_list:
-            full_text = full_text.replace(s, "")
-        fmt = re.sub(r"[|\s]+", " ", full_text).strip(" |")
+        for a in feat.select("a[href*='/style/']"):
+            a.decompose()
+        fmt = re.sub(r"[|\s]+", " ", _text(feat)).strip(" |")
 
     price = _text(card.select_one("span.price .woocommerce-Price-amount"))
 
