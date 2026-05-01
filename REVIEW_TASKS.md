@@ -162,7 +162,7 @@ def write_output(results: list[Release]) -> None:
 
 ---
 
-## Task 6 — Add `--concurrency` CLI flag
+## Task 6 — Add `--concurrency` CLI flag ✓ DONE
 
 **Severity:** Low | **Category:** Maintainability / Usability
 

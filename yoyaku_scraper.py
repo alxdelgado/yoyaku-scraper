@@ -5,12 +5,16 @@ Uses curl-cffi to impersonate Chrome's TLS fingerprint, bypassing Cloudflare
 without any browser launches. Parsing is done with BeautifulSoup.
 
 Usage:
-  python3 yoyaku_scraper.py                      # default: Deep House + Techno + Tech House
-  python3 yoyaku_scraper.py acid minimal         # single-word styles, space-separated
-  python3 yoyaku_scraper.py acid minimal tech house  # multi-word styles joined automatically
+  python3 yoyaku_scraper.py                           # default: Deep House + Techno + Tech House
+  python3 yoyaku_scraper.py acid minimal              # single-word styles, space-separated
+  python3 yoyaku_scraper.py acid minimal tech house   # multi-word styles joined automatically
+  python3 yoyaku_scraper.py deep house -j 5           # lower concurrency for slow connections
 
   Style names are case-insensitive. Multi-word styles (e.g. "tech house", "deep house")
   are recognised automatically — no quotes required.
+
+Options:
+  --concurrency N, -j N   Max concurrent HTTP requests (default: 10)
 
 Algorithm (two-phase):
   Phase 1 — fetch all style pages in parallel, extract only release URLs.
@@ -39,7 +43,7 @@ from curl_cffi.requests import AsyncSession
 
 DEFAULT_STYLES = ["Deep House", "Techno", "Tech House"]
 BASE_URL = "https://yoyaku.io"
-CONCURRENCY = 10   # curl-cffi is lightweight — higher concurrency is safe
+CONCURRENCY = 10   # default; override with --concurrency / -j at runtime
 
 # All style names available on yoyaku.io (title-cased canonical forms).
 KNOWN_STYLES = [
@@ -276,14 +280,17 @@ async def phase1_collect_urls(
     style_slugs: dict[str, str],
     sem: asyncio.Semaphore,
     cache_slug: str | None = None,
+    concurrency: int = CONCURRENCY,
 ) -> tuple[dict[str, set[str]], dict[str, BeautifulSoup]]:
     """Fetch all style pages in parallel and collect release URLs per slug.
 
     Soups for pages belonging to cache_slug are retained and returned keyed by
     URL so Phase 2 can reuse them without re-fetching.
+    concurrency is used only for the progress line — the actual limit is
+    enforced by sem, which the caller constructs.
     """
     total_pages = sum(valid.values())
-    print(f"\nPhase 1 — collecting URLs ({total_pages} pages, concurrency={CONCURRENCY})…")
+    print(f"\nPhase 1 — collecting URLs ({total_pages} pages, concurrency={concurrency})…")
 
     async def _fetch(slug: str, url: str) -> tuple[str, str, set[str], BeautifulSoup | None]:
         # Returns (slug, page_url, release_urls, soup).
@@ -379,6 +386,13 @@ async def main():
         default=DEFAULT_STYLES,
         help=f"Style names (ALL must match). Defaults to: {DEFAULT_STYLES}",
     )
+    parser.add_argument(
+        "--concurrency", "-j",
+        type=int,
+        default=CONCURRENCY,
+        metavar="N",
+        help=f"Max concurrent HTTP requests (default: {CONCURRENCY})",
+    )
     args = parser.parse_args()
 
     required_styles = set(parse_styles(args.styles))
@@ -386,7 +400,7 @@ async def main():
 
     print(f"Filtering for releases with ALL of: {sorted(required_styles)}")
 
-    sem = asyncio.Semaphore(CONCURRENCY)
+    sem = asyncio.Semaphore(args.concurrency)
 
     async with AsyncSession(impersonate="chrome120") as session:
         valid = await probe_all_styles(session, style_slugs, sem)
@@ -398,7 +412,9 @@ async def main():
         # counts so we can tell Phase 1 which style's soups to cache upfront.
         smallest_slug = min(valid, key=lambda s: valid[s])
         style_url_sets, page_soups = await phase1_collect_urls(
-            session, valid, style_slugs, sem, cache_slug=smallest_slug
+            session, valid, style_slugs, sem,
+            cache_slug=smallest_slug,
+            concurrency=args.concurrency,
         )
 
         sorted_sets = sorted(style_url_sets.values(), key=len)
