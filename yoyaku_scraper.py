@@ -475,7 +475,8 @@ async def main():
         help=f"Max concurrent HTTP requests (default: {CONCURRENCY})",
     )
     args = parser.parse_args()
-    styles = list(set(parse_styles(args.styles)))
+    tokens = [t.strip(",") for t in args.styles if t.strip(",")]
+    styles = list(set(parse_styles(tokens)))
     results = await run_scraper(styles, concurrency=args.concurrency)
     write_output(results)
 
