@@ -66,10 +66,14 @@ def _cli_log(text: str, msg_type: str = "") -> None:
 
 # All style names available on yoyaku.io (title-cased canonical forms).
 KNOWN_STYLES = [
-    "Acid", "Ambient", "Breaks", "Chicago", "Deep House", "Detroit",
-    "Dub", "Dub Techno", "Electro", "Experimental", "House", "IDM",
-    "Jungle", "Minimal", "Minimal Techno", "Nu Disco", "Progressive House",
-    "Soul", "Tech House", "Techno",
+    "Abstract", "Acid", "Acid House", "Ambient", "Balearic", "Bass",
+    "Break Beat", "Breaks", "Deep House", "Deep Techno", "Detroit",
+    "Disco", "Downtempo", "Drone", "Dub", "Dub Techno", "Electro",
+    "Electronic", "Electronica", "Experimental", "Funk", "Hip Hop",
+    "House", "IDM", "Jazz", "Leftfield", "Minimal", "Minimal House",
+    "Minimal Techno", "New Wave", "Nu Disco", "Pop", "Progressive",
+    "Progressive House", "Synth Pop", "Tech House", "Techno", "Trance",
+    "UK Garage",
 ]
 _KNOWN_LOWER: dict[str, str] = {s.lower(): s for s in KNOWN_STYLES}
 
