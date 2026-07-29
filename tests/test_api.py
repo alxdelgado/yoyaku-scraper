@@ -73,6 +73,7 @@ class _FakeRelease:
     styles: str = "Techno"
     format: str = '12"'
     price: str = "€15.00"
+    in_stock: bool = True
 
 
 def _make_fake_scraper(*releases, messages=None):
@@ -85,7 +86,7 @@ def _make_fake_scraper(*releases, messages=None):
     if messages is None:
         messages = [("Scraping complete", "hi")]
 
-    async def _fake(styles, concurrency=10, log_fn=None):
+    async def _fake(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
         if log_fn:
             for text, msg_type in messages:
                 log_fn(text, msg_type)
@@ -155,7 +156,7 @@ class TestPostScrape:
         """When concurrency is omitted the scraper must receive concurrency=10."""
         received: dict = {}
 
-        async def _capturing_fake(styles, concurrency=10, log_fn=None):
+        async def _capturing_fake(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             received["concurrency"] = concurrency
             return []
 
@@ -171,7 +172,7 @@ class TestPostScrape:
     async def test_custom_concurrency_is_forwarded(self):
         received: dict = {}
 
-        async def _capturing_fake(styles, concurrency=10, log_fn=None):
+        async def _capturing_fake(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             received["concurrency"] = concurrency
             return []
 
@@ -183,6 +184,66 @@ class TestPostScrape:
             await asyncio.sleep(0.05)
 
         assert received.get("concurrency") == 3
+
+    async def test_recent_defaults_to_false(self):
+        received: dict = {}
+
+        async def _capturing_fake(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
+            received["recent"] = recent
+            return []
+
+        with patch("api.run_scraper", new=_capturing_fake):
+            async with AsyncClient(transport=make_transport(), base_url=BASE) as client:
+                resp = await client.post("/scrape", json={"styles": ["Techno"]})
+            await asyncio.sleep(0.05)
+
+        assert received.get("recent") is False
+
+    async def test_recent_true_is_forwarded(self):
+        received: dict = {}
+
+        async def _capturing_fake(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
+            received["recent"] = recent
+            return []
+
+        with patch("api.run_scraper", new=_capturing_fake):
+            async with AsyncClient(transport=make_transport(), base_url=BASE) as client:
+                resp = await client.post(
+                    "/scrape", json={"styles": ["Techno"], "recent": True}
+                )
+            await asyncio.sleep(0.05)
+
+        assert received.get("recent") is True
+
+    async def test_in_stock_only_defaults_to_false(self):
+        received: dict = {}
+
+        async def _capturing_fake(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
+            received["in_stock_only"] = in_stock_only
+            return []
+
+        with patch("api.run_scraper", new=_capturing_fake):
+            async with AsyncClient(transport=make_transport(), base_url=BASE) as client:
+                resp = await client.post("/scrape", json={"styles": ["Techno"]})
+            await asyncio.sleep(0.05)
+
+        assert received.get("in_stock_only") is False
+
+    async def test_in_stock_only_true_is_forwarded(self):
+        received: dict = {}
+
+        async def _capturing_fake(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
+            received["in_stock_only"] = in_stock_only
+            return []
+
+        with patch("api.run_scraper", new=_capturing_fake):
+            async with AsyncClient(transport=make_transport(), base_url=BASE) as client:
+                resp = await client.post(
+                    "/scrape", json={"styles": ["Techno"], "in_stock_only": True}
+                )
+            await asyncio.sleep(0.05)
+
+        assert received.get("in_stock_only") is True
 
     async def test_two_parallel_requests_return_distinct_job_ids(self):
         fake = _make_fake_scraper()
@@ -502,7 +563,7 @@ class TestLogFnQueueBehaviour:
         paused = asyncio.Event()
         resume = asyncio.Event()
 
-        async def _pausing_scraper(styles, concurrency=10, log_fn=None):
+        async def _pausing_scraper(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             if log_fn:
                 log_fn("test message", "hi")
             paused.set()       # signal: message was enqueued
@@ -527,7 +588,7 @@ class TestLogFnQueueBehaviour:
         paused = asyncio.Event()
         resume = asyncio.Event()
 
-        async def _pausing_scraper(styles, concurrency=10, log_fn=None):
+        async def _pausing_scraper(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             if log_fn:
                 log_fn("bad error", "err")
             paused.set()
@@ -551,7 +612,7 @@ class TestLogFnQueueBehaviour:
         paused = asyncio.Event()
         resume = asyncio.Event()
 
-        async def _pausing_scraper(styles, concurrency=10, log_fn=None):
+        async def _pausing_scraper(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             if log_fn:
                 log_fn("neutral line")   # default msg_type=""
             paused.set()
@@ -585,7 +646,7 @@ class TestLogFnQueueBehaviour:
 
     async def test_error_in_scraper_puts_sentinel_and_sets_error(self):
         """If run_scraper raises, error must be recorded and sentinel still placed."""
-        async def _failing_scraper(styles, concurrency=10, log_fn=None):
+        async def _failing_scraper(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             raise RuntimeError("scraper exploded")
 
         with patch("api.run_scraper", new=_failing_scraper):
@@ -649,7 +710,7 @@ class TestJobIsolation:
         """SSE streams for two concurrent jobs must not bleed messages across jobs."""
         barrier = asyncio.Event()
 
-        async def _slow_scraper(styles, concurrency=10, log_fn=None):
+        async def _slow_scraper(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             label = styles[0] if styles else "unknown"
             if log_fn:
                 log_fn(f"message-for-{label}", "hi")
@@ -683,7 +744,7 @@ class TestJobIsolation:
 
     async def test_error_in_one_job_does_not_affect_other_job(self):
         """An exception in job A must not corrupt job B's state."""
-        async def _failing(styles, concurrency=10, log_fn=None):
+        async def _failing(styles, concurrency=10, log_fn=None, recent=False, in_stock_only=False):
             raise RuntimeError("job A failed")
 
         release = _FakeRelease(title="Job B EP")

@@ -40,24 +40,40 @@ _jobs: dict[str, dict] = {}
 class ScrapeRequest(BaseModel):
     styles: list[str]
     concurrency: int = 10
+    recent: bool = False
+    in_stock_only: bool = False
 
 
 @app.post("/scrape")
 async def start_scrape(body: ScrapeRequest):
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {"queue": asyncio.Queue(), "results": None, "error": None}
-    asyncio.create_task(_run_job(job_id, body.styles, body.concurrency))
+    asyncio.create_task(
+        _run_job(job_id, body.styles, body.concurrency, body.recent, body.in_stock_only)
+    )
     return {"job_id": job_id}
 
 
-async def _run_job(job_id: str, styles: list[str], concurrency: int) -> None:
+async def _run_job(
+    job_id: str,
+    styles: list[str],
+    concurrency: int,
+    recent: bool = False,
+    in_stock_only: bool = False,
+) -> None:
     queue: asyncio.Queue = _jobs[job_id]["queue"]
 
     def log_fn(text: str, msg_type: str = "") -> None:
         queue.put_nowait({"type": msg_type, "text": text})
 
     try:
-        releases = await run_scraper(styles, concurrency=concurrency, log_fn=log_fn)
+        releases = await run_scraper(
+            styles,
+            concurrency=concurrency,
+            log_fn=log_fn,
+            recent=recent,
+            in_stock_only=in_stock_only,
+        )
         _jobs[job_id]["results"] = [asdict(r) for r in releases]
     except Exception as exc:
         log_fn(f"[error] {exc}", "err")

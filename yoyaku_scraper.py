@@ -113,6 +113,7 @@ class Release:
     styles: str
     format: str
     price: str
+    in_stock: bool
 
 
 def _text(tag) -> str:
@@ -123,11 +124,16 @@ def style_to_slug(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
 
 
+# "arrivals" is a reserved pseudo-style: style_to_slug("Arrivals") == "arrivals",
+# which is routed here to yoyaku.io's own new-arrivals category instead of a style page.
+SLUG_PATH_OVERRIDES = {"arrivals": "category"}
+
+
 def _page_urls(slug: str, total: int) -> list[str]:
-    # yoyaku.io has no /page/1/ variant — page 1 is the bare style URL.
+    # yoyaku.io has no /page/1/ variant — page 1 is the bare style/category URL.
+    base = f"{BASE_URL}/{SLUG_PATH_OVERRIDES.get(slug, 'style')}/{slug}/"
     return [
-        f"{BASE_URL}/style/{slug}/" if n == 1
-        else f"{BASE_URL}/style/{slug}/page/{n}/"
+        base if n == 1 else f"{base}page/{n}/"
         for n in range(1, total + 1)
     ]
 
@@ -178,7 +184,7 @@ async def probe_style(
     yoyaku.io omits pagination links on single-page styles, so the absence
     of .page-numbers links means exactly 1 page, not 0.
     """
-    soup = await get_soup(session, f"{BASE_URL}/style/{slug}/", sem)
+    soup = await get_soup(session, _page_urls(slug, 1)[0], sem)
     if soup is None:
         return 0
     page_links = soup.select(SEL_PAGE_NUMBERS)
@@ -247,10 +253,12 @@ def _parse_card(card, keep_urls: set[str]) -> Release | None:
         fmt = re.sub(r"[|\s]+", " ", _text(feat_copy)).strip(" |")
 
     price = _text(card.select_one(SEL_PRICE))
+    in_stock = "outofstock" not in card.get("class", [])
 
     return Release(
         title=title, url=card_url, artists=artists, label=label,
         sku=sku, styles=", ".join(styles_list), format=fmt, price=price,
+        in_stock=in_stock,
     )
 
 
@@ -406,14 +414,22 @@ async def run_scraper(
     styles: list[str],
     concurrency: int = CONCURRENCY,
     log_fn: Callable[..., None] = _cli_log,
+    recent: bool = False,
+    in_stock_only: bool = False,
 ) -> list[Release]:
     """Run the full scrape pipeline and return results.
 
     Suitable for embedding in a web API. log_fn(text, type) is called for every
     log line; type is "hi" (highlight), "err" (error), or "" (neutral). The CLI
     default (_cli_log) ignores type and just prints.
+
+    recent narrows results to yoyaku.io's own "Arrivals" category intersected with
+    the selected styles. in_stock_only drops releases whose listing card is marked
+    out of stock.
     """
     required_styles = set(styles)
+    if recent:
+        required_styles.add("Arrivals")
     style_slugs = {style_to_slug(s): s for s in required_styles}
 
     log_fn(f"Filtering for releases with ALL of: {sorted(required_styles)}", "hi")
@@ -424,6 +440,8 @@ async def run_scraper(
         if not valid:
             log_fn("No styles could be loaded.", "err")
             return []
+        if recent and "arrivals" not in valid:
+            log_fn("Arrivals category unreachable — results are not filtered by recency", "err")
 
         smallest_slug = min(valid, key=lambda s: valid[s])
         style_url_sets, page_soups = await phase1_collect_urls(
@@ -451,6 +469,9 @@ async def run_scraper(
             log_fn=log_fn,
         )
 
+    if in_stock_only:
+        all_results = [r for r in all_results if r.in_stock]
+
     all_results.sort(key=lambda r: r.title.lower())
     return all_results
 
@@ -474,10 +495,25 @@ async def main():
         metavar="N",
         help=f"Max concurrent HTTP requests (default: {CONCURRENCY})",
     )
+    parser.add_argument(
+        "--recent",
+        action="store_true",
+        help="Narrow results to yoyaku.io's Arrivals category intersected with the selected styles",
+    )
+    parser.add_argument(
+        "--in-stock-only",
+        action="store_true",
+        help="Drop releases that are out of stock",
+    )
     args = parser.parse_args()
     tokens = [t.strip(",") for t in args.styles if t.strip(",")]
     styles = list(set(parse_styles(tokens)))
-    results = await run_scraper(styles, concurrency=args.concurrency)
+    results = await run_scraper(
+        styles,
+        concurrency=args.concurrency,
+        recent=args.recent,
+        in_stock_only=args.in_stock_only,
+    )
     write_output(results)
 
 

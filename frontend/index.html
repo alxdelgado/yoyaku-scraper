@@ -203,6 +203,33 @@
     .si.on .sn { color: var(--paper); }
     .si.on .sn::after { width: 100%; background: var(--paper-dim); }
 
+    /* Toggles */
+    .tg {
+      flex-shrink: 0;
+      margin-top: 22px;
+    }
+    .tg-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 10px;
+      cursor: none;
+    }
+    .tg-row input[type="checkbox"] {
+      width: 10px;
+      height: 10px;
+      accent-color: var(--paper-mute);
+      cursor: none;
+    }
+    .tg-lbl {
+      font-size: 8px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--paper-ghost);
+      transition: color 0.4s;
+    }
+    .tg-row:hover .tg-lbl { color: var(--paper-mute); }
+
     /* Concurrency */
     .cc {
       flex-shrink: 0;
@@ -523,6 +550,12 @@
 
     <div class="sl" id="sl" role="group" aria-label="Style selection"></div>
 
+    <div class="tg">
+      <div class="rule"></div>
+      <label class="tg-row"><input type="checkbox" id="tg-recent" /><span class="tg-lbl">Recent arrivals</span></label>
+      <label class="tg-row"><input type="checkbox" id="tg-instock" /><span class="tg-lbl">In stock only</span></label>
+    </div>
+
     <div class="cc">
       <div class="rule"></div>
       <div class="lbl" style="margin-bottom:0;">Threads</div>
@@ -577,6 +610,7 @@
               <th data-col="styles">Styles</th>
               <th data-col="format">Format</th>
               <th data-col="price">Price</th>
+              <th data-col="in_stock">Stock</th>
               <th data-col="url">Link</th>
             </tr>
           </thead>
@@ -709,6 +743,7 @@ function renderResults(data) {
       <td title="${r.styles}">${r.styles}</td>
       <td>${r.format}</td>
       <td>${r.price}</td>
+      <td>${r.in_stock ? 'In stock' : 'Out of stock'}</td>
       <td><a href="${r.url}" target="_blank" rel="noopener" title="${r.url}">↗</a></td>
     `;
     tbody.appendChild(tr);
@@ -727,8 +762,8 @@ document.querySelectorAll('thead th[data-col]').forEach(th => {
     if (sortAsc) th.classList.add('asc');
 
     const sorted = [...currentResults].sort((a, b) => {
-      const va = (a[col] || '').toLowerCase();
-      const vb = (b[col] || '').toLowerCase();
+      const va = String(a[col] ?? '').toLowerCase();
+      const vb = String(b[col] ?? '').toLowerCase();
       return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
     renderResults(sorted);
@@ -756,23 +791,25 @@ function setRunning(on) {
 }
 
 async function runScraper() {
-  const styles      = [...selStyles];
-  const concurrency = parseInt(document.getElementById('cc-in').value, 10) || 10;
+  const styles       = [...selStyles];
+  const concurrency  = parseInt(document.getElementById('cc-in').value, 10) || 10;
+  const recent       = document.getElementById('tg-recent').checked;
+  const inStockOnly  = document.getElementById('tg-instock').checked;
 
   termClear();
   setRunning(true);
 
   if (DEMO_MODE) {
-    await runDemo(styles, concurrency);
+    await runDemo(styles, concurrency, recent, inStockOnly);
   } else {
-    await runLive(styles, concurrency);
+    await runLive(styles, concurrency, recent, inStockOnly);
   }
 
   setRunning(false);
 }
 
 /* Demo mode — simulates a real scraper run for design preview */
-async function runDemo(styles, concurrency) {
+async function runDemo(styles, concurrency, recent = false, inStockOnly = false) {
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
   termPrint(`Filtering for releases with ALL of: [${styles.join(', ')}]`, 'hi');
@@ -810,7 +847,7 @@ async function runDemo(styles, concurrency) {
   termPrint(`─`.repeat(40), 'dim');
   termPrint(`Total unique matching releases: ${count}`, 'hi');
 
-  const demoResults = Array.from({ length: count }, (_, i) => ({
+  let demoResults = Array.from({ length: count }, (_, i) => ({
     title:   `Release ${String.fromCharCode(65 + i)} — ${styles[0]} Edition`,
     url:     `https://yoyaku.io/style/${styles[0].toLowerCase().replace(/\s+/g, '-')}/`,
     artists: i % 2 === 0 ? 'Artist Alpha' : 'Artist Beta, Artist Gamma',
@@ -819,7 +856,9 @@ async function runDemo(styles, concurrency) {
     styles:  styles.slice(0, 2).join(', '),
     format:  ['12"', '2×12"', '10"'][i % 3],
     price:   `€${(10 + i * 2.5).toFixed(2)}`,
+    in_stock: i % 4 !== 0,
   }));
+  if (inStockOnly) demoResults = demoResults.filter(r => r.in_stock);
 
   renderResults(demoResults);
   termPrint(`Saved: yoyaku_results.json`, 'dim');
@@ -827,12 +866,12 @@ async function runDemo(styles, concurrency) {
 }
 
 /* Live mode — connects to FastAPI backend (Phase A) */
-async function runLive(styles, concurrency) {
+async function runLive(styles, concurrency, recent = false, inStockOnly = false) {
   try {
     const res = await fetch(`${API_BASE}/scrape`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ styles, concurrency }),
+      body: JSON.stringify({ styles, concurrency, recent, in_stock_only: inStockOnly }),
     });
     if (!res.ok) { termPrint(`[error] HTTP ${res.status}`, 'err'); return; }
     const { job_id } = await res.json();
@@ -868,7 +907,7 @@ document.getElementById('ep-csv').addEventListener('click', () => {
   if (!currentResults.length) return;
   const keys = Object.keys(currentResults[0]).filter(k => k !== 'url');
   const rows = [keys.join(','), ...currentResults.map(r =>
-    keys.map(k => `"${(r[k] || '').replace(/"/g, '""')}"`).join(',')
+    keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(',')
   )];
   const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
   triggerDownload(blob, 'yoyaku_results.csv');

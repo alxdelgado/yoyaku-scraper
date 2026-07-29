@@ -43,6 +43,7 @@ def make_card(
     styles: list[str] | None = None,
     fmt: str = '12"',
     price: str = "€15.00",
+    stock_class: str = "instock",
 ) -> BeautifulSoup:
     """Return a BeautifulSoup ``li.product`` element with realistic structure.
 
@@ -59,7 +60,7 @@ def make_card(
     artist_links = ", ".join(f'<a href="#">{a}</a>' for a in artists)
 
     html = f"""
-    <li class="product">
+    <li class="product {stock_class}">
       <a class="woocommerce-LoopProduct-link" href="{url}">{title}</a>
       <p class="product-artists">{artist_links}</p>
       <p class="product-labels">
@@ -177,6 +178,18 @@ class TestPageUrls:
     def test_total_count_matches_argument(self):
         assert len(_page_urls("acid", 7)) == 7
 
+    def test_arrivals_slug_routes_to_category_path(self):
+        # "arrivals" is a reserved pseudo-style routed to yoyaku.io's own
+        # new-arrivals category rather than a /style/ page.
+        assert _page_urls("arrivals", 1) == [f"{BASE_URL}/category/arrivals/"]
+
+    def test_arrivals_pagination_uses_category_path(self):
+        urls = _page_urls("arrivals", 2)
+        assert urls[1] == f"{BASE_URL}/category/arrivals/page/2/"
+
+    def test_other_slugs_unaffected_by_arrivals_override(self):
+        assert _page_urls("techno", 1) == [f"{BASE_URL}/style/techno/"]
+
 
 # ── _parse_card ───────────────────────────────────────────────────────────────
 
@@ -263,3 +276,19 @@ class TestParseCard:
         _parse_card(card, keep_urls=set())
 
         assert len(card.select(SEL_STYLE_LINK)) == links_before
+
+    def test_in_stock_true_when_instock_class_present(self):
+        card = make_card(url=CARD_URL, stock_class="instock")
+        r = _parse_card(card, keep_urls={CARD_URL})
+        assert r.in_stock is True
+
+    def test_in_stock_false_when_outofstock_class_present(self):
+        card = make_card(url=CARD_URL, stock_class="outofstock")
+        r = _parse_card(card, keep_urls={CARD_URL})
+        assert r.in_stock is False
+
+    def test_in_stock_defaults_true_when_no_stock_class_present(self):
+        """A card with neither instock nor outofstock is treated as in stock."""
+        card = make_card(url=CARD_URL, stock_class="")
+        r = _parse_card(card, keep_urls={CARD_URL})
+        assert r.in_stock is True
