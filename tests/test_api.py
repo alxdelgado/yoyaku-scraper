@@ -8,6 +8,7 @@ Run with:
     pytest tests/test_api.py -v
 
 Coverage:
+  GET  /styles      — bare JSON array matching yoyaku_scraper.KNOWN_STYLES
   POST /scrape      — valid request, missing fields, empty styles, concurrency default
   GET  /stream      — full SSE stream, message types, done-event format, unknown job
   GET  /results     — results ready, job still running (202), job errored (500), unknown job
@@ -29,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import api as api_module
 from api import _jobs, app
+from yoyaku_scraper import KNOWN_STYLES
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -105,6 +107,27 @@ def clear_jobs():
     _jobs.clear()
     yield
     _jobs.clear()
+
+
+# ---------------------------------------------------------------------------
+# GET /styles
+# ---------------------------------------------------------------------------
+
+class TestGetStyles:
+    async def test_returns_200(self):
+        async with AsyncClient(transport=make_transport(), base_url=BASE) as client:
+            resp = await client.get("/styles")
+        assert resp.status_code == 200
+
+    async def test_returns_bare_array_matching_known_styles(self):
+        async with AsyncClient(transport=make_transport(), base_url=BASE) as client:
+            resp = await client.get("/styles")
+        assert resp.json() == KNOWN_STYLES
+
+    async def test_arrivals_pseudo_style_not_included(self):
+        async with AsyncClient(transport=make_transport(), base_url=BASE) as client:
+            resp = await client.get("/styles")
+        assert "Arrivals" not in resp.json()
 
 
 # ---------------------------------------------------------------------------

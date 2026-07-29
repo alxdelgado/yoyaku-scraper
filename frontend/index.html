@@ -6,23 +6,30 @@
   <title>Yoyaku</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
 
   <style>
     /* ── Tokens ───────────────────────────────────────────────────────────── */
     :root {
-      --bg:          #0b0b09;
-      --paper:       #e6dece;
-      --paper-dim:   #9e9890;
-      --paper-mute:  #5e5a52;
-      --paper-ghost: #34322e;
-      --line:        rgba(230,222,206,0.08);
-      --line-mid:    rgba(230,222,206,0.14);
-      --serif:       'Cormorant Garamond', Georgia, serif;
-      --mono:        'DM Mono', 'Courier New', monospace;
-      --sb:          252px;
-      --px:          44px;
-      --py:          44px;
+      --ink:         #16130f;
+      --ink-2:       #241d15;
+      --cream:       #f5eeda;
+      --cream-dim:   rgba(245,238,218,0.60);
+      --cream-ghost: rgba(245,238,218,0.32);
+      --paper:       #ece0c2;
+      --paper-2:     #e3d5b1;
+      --ink-text:    #221b13;
+      --ink-dim:     rgba(34,27,19,0.62);
+      --ink-ghost:   rgba(34,27,19,0.38);
+      --rule:        rgba(34,27,19,0.16);
+      --rule-strong: rgba(34,27,19,0.34);
+      --accent:      #c8fb3c;
+      --accent-ink:  #16130f;
+      --display:     'Anton', 'Arial Narrow', sans-serif;
+      --mono:        'Courier Prime', 'Courier New', monospace;
+      --sb:          264px;
+      --px:          40px;
+      --py:          36px;
     }
 
     /* ── Reset ────────────────────────────────────────────────────────────── */
@@ -31,50 +38,14 @@
     html, body {
       height: 100%;
       overflow: hidden;
-      background: var(--bg);
-      color: var(--paper-dim);
+      background: var(--paper);
+      color: var(--ink-text);
       font-family: var(--mono);
       font-size: 11px;
-      line-height: 1.7;
-      cursor: none;
+      line-height: 1.6;
     }
 
-    /* Grain overlay — analog paper feel */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: 200;
-      pointer-events: none;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-      background-size: 192px 192px;
-      opacity: 0.028;
-    }
-
-    /* ── Cursor ───────────────────────────────────────────────────────────── */
-    #cur {
-      position: fixed;
-      z-index: 9999;
-      pointer-events: none;
-      width: 22px;
-      height: 22px;
-      transform: translate(-50%, -50%);
-    }
-    #cur::before, #cur::after {
-      content: '';
-      position: absolute;
-      background: var(--paper);
-      opacity: 0.55;
-      top: 50%; left: 50%;
-    }
-    #cur::before {
-      width: 1px; height: 18px;
-      transform: translate(-50%, -50%);
-    }
-    #cur::after {
-      width: 18px; height: 1px;
-      transform: translate(-50%, -50%);
-    }
+    button, input { font: inherit; }
 
     /* ── App shell ────────────────────────────────────────────────────────── */
     #app {
@@ -82,325 +53,241 @@
       grid-template-columns: var(--sb) 1fr;
       height: 100vh;
       opacity: 0;
-      animation: app-in 1.4s ease 0.15s forwards;
+      animation: app-in 0.8s ease 0.1s forwards;
     }
     @keyframes app-in { to { opacity: 1; } }
 
-    /* ── Sidebar ──────────────────────────────────────────────────────────── */
+    /* ── Sidebar — "flyer" register ──────────────────────────────────────── */
     #sb {
-      border-right: 1px solid var(--line-mid);
+      background-color: var(--ink);
+      background-image: radial-gradient(rgba(200,251,60,0.07) 1px, transparent 1.3px);
+      background-size: 5px 5px;
+      color: var(--cream);
+      border-right: 3px solid var(--ink-2);
       display: flex;
       flex-direction: column;
-      padding: var(--py) 28px 32px;
+      padding: var(--py) 26px 30px;
       overflow: hidden;
     }
 
     .wm {
-      font-family: var(--serif);
-      font-weight: 300;
-      font-size: 26px;
-      letter-spacing: 0.13em;
-      color: var(--paper);
-      line-height: 1;
-      margin-bottom: 5px;
+      font-family: var(--display);
+      font-size: 32px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--cream);
+      line-height: 0.85;
+    }
+    .wm-bar {
+      width: 44px;
+      height: 5px;
+      background: var(--accent);
+      margin: 8px 0 10px;
     }
     .wm-sub {
-      font-size: 7.5px;
-      letter-spacing: 0.38em;
+      font-size: 8px;
+      letter-spacing: 0.24em;
       text-transform: uppercase;
-      color: var(--paper-ghost);
-      margin-bottom: 40px;
+      color: var(--cream-ghost);
+      margin-bottom: 30px;
     }
 
-    .rule {
-      width: 20px;
-      height: 1px;
-      background: var(--line-mid);
-      margin-bottom: 12px;
-      flex-shrink: 0;
-    }
+    .rule { width: 100%; height: 1px; background: rgba(245,238,218,0.14); margin-bottom: 12px; flex-shrink: 0; }
+    .rule.on-paper { background: var(--rule); }
+
     .lbl {
-      font-size: 7.5px;
-      letter-spacing: 0.42em;
+      font-family: var(--display);
+      font-size: 12px;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--paper-ghost);
-      margin-bottom: 12px;
-      flex-shrink: 0;
-    }
-
-    /* Style actions */
-    .sa {
-      display: flex;
-      gap: 16px;
+      color: var(--cream-ghost);
       margin-bottom: 10px;
       flex-shrink: 0;
     }
+    .lbl.on-paper { color: var(--ink-ghost); }
+
+    /* Style actions */
+    .sa { display: flex; gap: 16px; margin-bottom: 10px; flex-shrink: 0; }
     .sa button {
       font-family: var(--mono);
-      font-size: 7.5px;
-      letter-spacing: 0.3em;
+      font-size: 8px;
+      letter-spacing: 0.2em;
       text-transform: uppercase;
-      color: var(--paper-ghost);
+      color: var(--cream-ghost);
       background: none;
       border: none;
-      cursor: none;
       padding: 0;
-      transition: color 0.5s;
+      cursor: pointer;
+      transition: color 0.3s;
     }
-    .sa button:hover { color: var(--paper-mute); }
+    .sa button:hover { color: var(--accent); }
 
     /* Style list */
-    .sl {
-      flex: 1 1 0;
-      min-height: 0;
-      overflow-y: auto;
-      scrollbar-width: none;
-    }
+    .sl { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; }
     .sl::-webkit-scrollbar { display: none; }
 
     .si {
       display: flex;
       align-items: center;
-      gap: 9px;
+      gap: 8px;
       padding: 4px 0;
-      cursor: none;
-      opacity: 0.4;
-      transition: opacity 0.45s ease;
+      cursor: pointer;
+      opacity: 0.45;
+      transition: opacity 0.3s ease;
     }
-    .si:hover { opacity: 0.72; }
+    .si:hover { opacity: 0.78; }
     .si.on    { opacity: 1; }
 
     .pip {
-      width: 3px;
-      height: 3px;
-      border-radius: 50%;
-      background: var(--paper);
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
       flex-shrink: 0;
       opacity: 0;
       transform: scale(0);
-      transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.34,1.56,0.64,1);
+      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
     }
     .si.on .pip { opacity: 1; transform: scale(1); }
 
-    .sn {
-      font-size: 10px;
-      letter-spacing: 0.04em;
-      color: var(--paper-dim);
-      transition: color 0.45s;
-      position: relative;
+    .sn { font-size: 10px; letter-spacing: 0.02em; color: var(--cream-dim); transition: color 0.3s; }
+    .si.on .sn { color: var(--cream); }
+
+    /* Degraded-mode banner */
+    .degraded {
+      font-size: 8px;
+      line-height: 1.5;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      margin-top: 8px;
+      flex-shrink: 0;
     }
-    .sn::after {
-      content: '';
-      position: absolute;
-      bottom: -1px;
-      left: 0;
-      width: 0;
-      height: 1px;
-      background: var(--paper-mute);
-      transition: width 0.45s ease;
-    }
-    .si:hover .sn::after { width: 100%; }
-    .si.on .sn { color: var(--paper); }
-    .si.on .sn::after { width: 100%; background: var(--paper-dim); }
+    .degraded[hidden] { display: none; }
 
     /* Toggles */
-    .tg {
-      flex-shrink: 0;
-      margin-top: 22px;
-    }
-    .tg-row {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      margin-top: 10px;
-      cursor: none;
-    }
-    .tg-row input[type="checkbox"] {
-      width: 10px;
-      height: 10px;
-      accent-color: var(--paper-mute);
-      cursor: none;
-    }
-    .tg-lbl {
-      font-size: 8px;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--paper-ghost);
-      transition: color 0.4s;
-    }
-    .tg-row:hover .tg-lbl { color: var(--paper-mute); }
+    .tg { flex-shrink: 0; margin-top: 20px; }
+    .tg-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer; }
+    .tg-row input[type="checkbox"] { width: 11px; height: 11px; accent-color: var(--accent); cursor: pointer; }
+    .tg-lbl { font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cream-ghost); transition: color 0.3s; }
+    .tg-row:hover .tg-lbl { color: var(--cream); }
 
     /* Concurrency */
-    .cc {
-      flex-shrink: 0;
-      margin-top: 22px;
-    }
-    .cc-row {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      margin-top: 8px;
-    }
-    .cc-lbl {
-      font-size: 7.5px;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: var(--paper-ghost);
-    }
+    .cc { flex-shrink: 0; margin-top: 20px; }
+    .cc-row { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; }
+    .cc-lbl { font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cream-ghost); }
     #cc-in {
       background: none;
       border: none;
-      border-bottom: 1px solid var(--line-mid);
-      color: var(--paper-dim);
+      border-bottom: 1px solid rgba(245,238,218,0.24);
+      color: var(--cream);
       font-family: var(--mono);
+      font-weight: 700;
       font-size: 14px;
-      font-weight: 300;
       width: 38px;
       padding: 2px 0 4px;
       outline: none;
-      transition: border-color 0.4s, color 0.4s;
+      transition: border-color 0.3s;
     }
-    #cc-in:focus { border-color: var(--paper-mute); color: var(--paper); }
+    #cc-in:focus { border-color: var(--accent); }
 
     /* Execute */
     .ex { flex-shrink: 0; margin-top: 22px; }
-
     #ex-btn {
-      font-family: var(--serif);
-      font-style: italic;
-      font-weight: 300;
-      font-size: 21px;
-      letter-spacing: 0.05em;
-      color: var(--paper);
-      background: none;
-      border: none;
-      cursor: none;
-      padding: 0;
-      opacity: 0.2;
-      position: relative;
-      transition: opacity 0.7s ease;
-      display: inline-block;
-    }
-    #ex-btn::after {
-      content: '';
-      position: absolute;
-      bottom: 1px; left: 0;
-      width: 0;
-      height: 1px;
-      background: var(--paper);
-      transition: width 0.6s ease;
-    }
-    #ex-btn:not(:disabled):hover { opacity: 0.88; }
-    #ex-btn:not(:disabled):hover::after { width: 100%; }
-    #ex-btn:disabled { opacity: 0.1; }
-    #ex-btn.running {
-      opacity: 0.45;
-      animation: ex-breathe 2.8s ease-in-out infinite;
-    }
-    #ex-btn.running::after { width: 100%; }
-    @keyframes ex-breathe {
-      0%,100% { opacity: 0.3; }
-      50%      { opacity: 0.6; }
-    }
-
-    /* Export */
-    .ep {
-      flex-shrink: 0;
-      display: flex;
-      gap: 18px;
-      margin-top: 14px;
-    }
-    .ep-btn {
-      font-family: var(--mono);
-      font-size: 7.5px;
-      letter-spacing: 0.28em;
-      text-transform: uppercase;
-      color: var(--paper-ghost);
-      background: none;
-      border: none;
-      cursor: none;
-      padding: 0;
-      transition: color 0.5s;
-    }
-    .ep-btn:not(:disabled):hover { color: var(--paper-mute); }
-    .ep-btn:disabled { opacity: 0.22; }
-
-    /* Status */
-    .st {
-      flex-shrink: 0;
+      width: 100%;
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-top: 22px;
-    }
-    .st-pip {
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background: var(--paper-ghost);
-      transition: background 0.7s;
-      flex-shrink: 0;
-    }
-    .st-pip.on { background: var(--paper-mute); }
-    .st-txt {
-      font-size: 7.5px;
-      letter-spacing: 0.28em;
+      justify-content: center;
+      gap: 9px;
+      font-family: var(--display);
+      font-size: 16px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--paper-ghost);
-      transition: color 0.5s;
+      color: var(--accent-ink);
+      background: var(--accent);
+      border: none;
+      padding: 12px 0;
+      cursor: pointer;
+      transition: background 0.3s, opacity 0.3s;
     }
-    .st-pip.on + .st-txt { color: var(--paper-mute); }
+    #ex-btn:not(:disabled):hover { background: #d8ff6b; }
+    #ex-btn:disabled { background: var(--ink-2); color: var(--cream-ghost); cursor: default; }
+    #ex-btn.running { background: var(--ink-2); color: var(--cream); }
 
-    /* ── Main ─────────────────────────────────────────────────────────────── */
+    .vinyl {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, var(--accent) 0 2px, transparent 2.4px),
+        repeating-radial-gradient(circle, rgba(245,238,218,0.55) 0 1px, transparent 1px 3px);
+      background-color: #050403;
+      display: none;
+      flex-shrink: 0;
+      animation: vinyl-spin 1s linear infinite;
+    }
+    #ex-btn.running .vinyl { display: block; }
+    @keyframes vinyl-spin { to { transform: rotate(360deg); } }
+
+    /* Export */
+    .ep { flex-shrink: 0; display: flex; gap: 18px; margin-top: 14px; }
+    .ep-btn {
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--cream-ghost);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      transition: color 0.3s;
+    }
+    .ep-btn:not(:disabled):hover { color: var(--accent); }
+    .ep-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* Status */
+    .st { flex-shrink: 0; display: flex; align-items: center; gap: 8px; margin-top: 20px; }
+    .st-pip { width: 6px; height: 6px; background: var(--ink-2); border: 1px solid rgba(245,238,218,0.2); transition: background 0.4s, border-color 0.4s; flex-shrink: 0; }
+    .st-pip.on { background: var(--accent); border-color: var(--accent); }
+    .st-txt { font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cream-ghost); }
+
+    /* ── Main — "ticket counter" register ────────────────────────────────── */
     #main {
       display: grid;
       grid-template-rows: 1fr 1fr;
       overflow: hidden;
       position: relative;
+      background: var(--paper);
     }
-
-    /* Background genre-name texture */
-    #tex {
+    /* Faint paper grain — kept subtle everywhere in the main panel, and this
+       is the ONLY texture allowed near the results table (see #res-tw rule). */
+    #main::before {
+      content: '';
       position: absolute;
       inset: 0;
       z-index: 0;
       pointer-events: none;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-around;
-      padding: 0 var(--px);
-      opacity: 0.05;
-      user-select: none;
-      aria-hidden: true;
-    }
-    .tex-r {
-      font-family: var(--serif);
-      font-size: 13px;
-      font-weight: 300;
-      letter-spacing: 0.22em;
-      color: var(--paper);
-      white-space: nowrap;
-      overflow: hidden;
-      line-height: 2.6;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 192px 192px;
+      opacity: 0.02;
     }
 
     /* Log panel */
     #log-w {
-      border-bottom: 1px solid var(--line);
+      border-bottom: 3px dashed var(--rule-strong);
       display: flex;
       flex-direction: column;
-      padding: var(--py) var(--px) 28px;
+      padding: var(--py) var(--px) 26px;
       overflow: hidden;
       position: relative;
       z-index: 1;
     }
+    #res-w { border-left: none; }
     .pl {
-      font-size: 7.5px;
-      letter-spacing: 0.42em;
+      font-family: var(--display);
+      font-size: 13px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--paper-ghost);
-      margin-bottom: 18px;
+      color: var(--ink-ghost);
+      margin-bottom: 16px;
       flex-shrink: 0;
     }
     #log {
@@ -408,30 +295,25 @@
       overflow-y: auto;
       scrollbar-width: none;
       font-size: 10px;
-      line-height: 2.3;
-      color: var(--paper-ghost);
+      line-height: 2.1;
+      color: var(--ink-dim);
     }
     #log::-webkit-scrollbar { display: none; }
 
-    .ll {
-      display: block;
-      opacity: 0;
-      transform: translateY(4px);
-      animation: ll-in 0.65s ease forwards;
-    }
-    .ll.hi   { color: var(--paper-dim); }
-    .ll.warn { color: rgba(198,162,88,0.7); }
-    .ll.err  { color: rgba(196,76,68,0.7); }
-    .ll.dim  { animation: ll-in-dim 0.65s ease forwards; }
+    .ll { display: block; opacity: 0; transform: translateY(3px); animation: ll-in 0.4s ease forwards; }
+    .ll.hi   { color: var(--ink-text); font-weight: 700; }
+    .ll.warn { color: #8a5a12; }
+    .ll.err  { color: #a3341f; }
+    .ll.dim  { animation: ll-in-dim 0.4s ease forwards; }
 
     @keyframes ll-in     { to { opacity: 1;    transform: translateY(0); } }
-    @keyframes ll-in-dim { to { opacity: 0.46; transform: translateY(0); } }
+    @keyframes ll-in-dim { to { opacity: 0.55; transform: translateY(0); } }
 
     /* Results panel */
     #res-w {
       display: flex;
       flex-direction: column;
-      padding: 28px var(--px) var(--py);
+      padding: 26px var(--px) var(--py);
       overflow: hidden;
       position: relative;
       z-index: 1;
@@ -442,16 +324,17 @@
       gap: 14px;
       margin-bottom: 14px;
       flex-shrink: 0;
+      border-left: 4px solid var(--accent);
+      padding-left: 10px;
     }
-    #res-ct {
-      font-size: 8px;
-      letter-spacing: 0.28em;
-      color: var(--paper-ghost);
-    }
+    #res-ct { font-size: 9px; letter-spacing: 0.14em; color: var(--ink-ghost); }
     #res-tw {
       flex: 1;
       overflow: auto;
       scrollbar-width: none;
+      position: relative;
+      z-index: 1; /* sits above #main::before — keeps grain effectively invisible here */
+      background: var(--paper);
     }
     #res-tw::-webkit-scrollbar { display: none; }
 
@@ -460,64 +343,79 @@
     thead th {
       position: sticky;
       top: 0;
-      background: var(--bg);
-      color: var(--paper-ghost);
+      background: var(--paper);
+      color: var(--ink-text);
       text-align: left;
-      padding: 0 20px 10px 0;
-      font-family: var(--mono);
-      font-size: 7.5px;
+      padding: 0 18px 10px 0;
+      font-family: var(--display);
+      font-size: 11px;
       font-weight: 400;
-      letter-spacing: 0.38em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      border-bottom: 1px solid var(--line);
-      cursor: none;
+      border-bottom: 3px solid var(--ink-text);
+      cursor: pointer;
       user-select: none;
-      transition: color 0.4s;
+      transition: color 0.3s;
     }
-    thead th:hover { color: var(--paper-mute); }
-    thead th.sorted { color: var(--paper-mute); }
+    thead th:hover { color: var(--ink-dim); }
+    thead th.sorted { color: var(--ink-text); }
     thead th.sorted::after { content: ' ↓'; }
     thead th.sorted.asc::after { content: ' ↑'; }
 
     tbody tr {
       opacity: 0;
-      transform: translateY(3px);
-      border-bottom: 1px solid var(--line);
-      transition: background 0.35s;
+      transform: translateY(2px) scale(0.99);
+      border-bottom: 1px solid var(--rule);
+      transition: background 0.25s;
     }
-    tbody tr.vis { animation: tr-in 0.9s ease forwards; }
-    tbody tr:hover { background: rgba(230,222,206,0.022); }
-    tbody tr:hover td:first-child { color: var(--paper); }
+    tbody tr.vis { animation: tr-in 0.32s ease forwards; }
+    tbody tr:hover { background: rgba(34,27,19,0.04); }
+    tbody tr:hover td:first-child { color: var(--ink-text); }
 
-    @keyframes tr-in { to { opacity: 1; transform: translateY(0); } }
+    @keyframes tr-in { to { opacity: 1; transform: translateY(0) scale(1); } }
 
     tbody td {
-      padding: 10px 20px 10px 0;
+      padding: 9px 18px 9px 0;
       font-size: 10px;
-      color: var(--paper-ghost);
+      color: var(--ink-dim);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 165px;
-      transition: color 0.35s;
+      max-width: 160px;
+      transition: color 0.25s;
     }
-    tbody td:first-child { color: var(--paper-mute); }
-    tbody td a {
-      color: var(--paper-ghost);
-      text-decoration: none;
-      transition: color 0.4s;
+    tbody td:first-child { color: var(--ink-text); font-weight: 700; }
+    tbody td a { color: var(--ink-ghost); text-decoration: none; transition: color 0.3s; }
+    tbody td a:hover { color: var(--ink-text); }
+
+    /* Stamped catalog number */
+    .stamp {
+      display: inline-block;
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 9px;
+      letter-spacing: 0.03em;
+      padding: 2px 6px;
+      border: 1px solid var(--ink-ghost);
+      border-radius: 2px;
+      color: var(--ink-dim);
+      transform: rotate(-1.5deg);
     }
-    tbody td a:hover { color: var(--paper); }
+
+    /* Stock indicator — the ONE place accent color appears inside <tbody> */
+    .stock { display: inline-flex; align-items: center; gap: 6px; }
+    .stock-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--ink-ghost); background: transparent; flex-shrink: 0; }
+    .stock-dot.on { background: var(--accent); border-color: var(--accent); }
 
     .empty {
       display: flex;
       align-items: center;
       height: 60px;
-      font-size: 8px;
-      letter-spacing: 0.38em;
+      font-family: var(--display);
+      font-size: 11px;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--paper-ghost);
-      opacity: 0.4;
+      color: var(--ink-ghost);
     }
 
     /* ── Reduced motion ───────────────────────────────────────────────────── */
@@ -531,14 +429,13 @@
 </head>
 <body>
 
-<div id="cur" aria-hidden="true"></div>
-
 <div id="app">
 
   <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
   <aside id="sb">
     <div class="wm">Yoyaku</div>
-    <div class="wm-sub">Style Intersection Engine</div>
+    <div class="wm-bar"></div>
+    <div class="wm-sub">Crate Intersection Engine</div>
 
     <div class="rule"></div>
     <div class="lbl">Styles</div>
@@ -549,6 +446,7 @@
     </div>
 
     <div class="sl" id="sl" role="group" aria-label="Style selection"></div>
+    <div class="degraded" id="styles-degraded" hidden></div>
 
     <div class="tg">
       <div class="rule"></div>
@@ -567,7 +465,7 @@
 
     <div class="ex">
       <div class="rule" style="margin-top:6px;"></div>
-      <button id="ex-btn" disabled>execute</button>
+      <button id="ex-btn" disabled><span class="vinyl" aria-hidden="true"></span><span id="ex-btn-txt">execute</span></button>
     </div>
 
     <div class="ep">
@@ -583,7 +481,6 @@
 
   <!-- ── Main ───────────────────────────────────────────────────────────── -->
   <main id="main">
-    <div id="tex" aria-hidden="true"></div>
 
     <!-- Log -->
     <div id="log-w">
@@ -607,6 +504,7 @@
               <th data-col="title">Title</th>
               <th data-col="artists">Artists</th>
               <th data-col="label">Label</th>
+              <th data-col="sku">Cat No</th>
               <th data-col="styles">Styles</th>
               <th data-col="format">Format</th>
               <th data-col="price">Price</th>
@@ -623,152 +521,258 @@
 
 <script>
 /* ── Config ──────────────────────────────────────────────────────────────── */
-const API_BASE  = 'http://localhost:8000';
-const DEMO_MODE = false;
+const CONFIG = {
+  API_BASE: 'http://localhost:8000',
+  DEMO_MODE: false,
+};
 
-const KNOWN_STYLES = [
-  "Acid","Ambient","Breaks","Chicago","Deep House","Detroit",
-  "Dub","Dub Techno","Electro","Experimental","House","IDM",
-  "Jungle","Minimal","Minimal Techno","Nu Disco","Progressive House",
-  "Soul","Tech House","Techno",
-];
+/* ── Style list — fetched from the backend, never hardcoded twice ─────────
+   GET /styles returns yoyaku_scraper.KNOWN_STYLES verbatim, so this file and
+   the scraper can never drift out of sync again. DEMO_MODE and any fetch
+   failure fall back to a small curated list, with a persistent (not just
+   logged) indicator that the fallback is in effect. ────────────────────── */
+const Styles = (() => {
+  const FALLBACK_STYLES = [
+    'Acid', 'Ambient', 'Deep House', 'Disco', 'Dub Techno',
+    'Electro', 'House', 'Minimal', 'Tech House', 'Techno',
+  ];
 
-/* ── Cursor ──────────────────────────────────────────────────────────────── */
-const cur = document.getElementById('cur');
-document.addEventListener('mousemove', e => {
-  cur.style.left = e.clientX + 'px';
-  cur.style.top  = e.clientY + 'px';
-});
-
-/* ── Background texture ──────────────────────────────────────────────────── */
-(function () {
-  const tex = document.getElementById('tex');
-  const row = KNOWN_STYLES.join('   ·   ') + '   ·   ';
-  for (let i = 0; i < 14; i++) {
-    const d = document.createElement('div');
-    d.className = 'tex-r';
-    d.textContent = row;
-    tex.appendChild(d);
+  async function load() {
+    if (CONFIG.DEMO_MODE) {
+      return { styles: FALLBACK_STYLES, degraded: false };
+    }
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/styles`, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const styles = await res.json();
+      if (!Array.isArray(styles) || styles.length === 0) throw new Error('empty style list');
+      return { styles, degraded: false };
+    } catch (err) {
+      return { styles: FALLBACK_STYLES, degraded: true };
+    }
   }
+
+  return { load, FALLBACK_STYLES };
 })();
 
-/* ── Style selector ──────────────────────────────────────────────────────── */
-const slEl      = document.getElementById('sl');
-const exBtn     = document.getElementById('ex-btn');
-const selStyles = new Set();
+/* ── State ───────────────────────────────────────────────────────────────── */
+const State = (() => {
+  let currentResults = [];
+  let sortCol = 'title';
+  let sortAsc = true;
+  return {
+    selStyles: new Set(),
+    get currentResults() { return currentResults; },
+    set currentResults(v) { currentResults = v; },
+    get sortCol() { return sortCol; },
+    set sortCol(v) { sortCol = v; },
+    get sortAsc() { return sortAsc; },
+    set sortAsc(v) { sortAsc = v; },
+  };
+})();
 
-KNOWN_STYLES.forEach(style => {
-  const item = document.createElement('div');
-  item.className = 'si';
-  item.setAttribute('role', 'checkbox');
-  item.setAttribute('aria-checked', 'false');
-  item.setAttribute('tabindex', '0');
-  item.dataset.style = style;
-  item.innerHTML = `<span class="pip" aria-hidden="true"></span><span class="sn">${style}</span>`;
+/* ── Motion — row-reveal timing, capped so large result sets stay fast ───── */
+const Motion = (() => {
+  const REVEAL_CAP = 40;
+  const REVEAL_STEP_MS = 22;
 
-  function toggle() {
-    if (selStyles.has(style)) {
-      selStyles.delete(style);
-      item.classList.remove('on');
-      item.setAttribute('aria-checked', 'false');
-    } else {
-      selStyles.add(style);
-      item.classList.add('on');
-      item.setAttribute('aria-checked', 'true');
+  const reducedMotion = () =>
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function revealRows(rows) {
+    if (reducedMotion()) {
+      rows.forEach(tr => tr.classList.add('vis'));
+      return;
     }
-    exBtn.disabled = selStyles.size < 1;
+    rows.forEach((tr, i) => {
+      if (i < REVEAL_CAP) {
+        setTimeout(() => tr.classList.add('vis'), i * REVEAL_STEP_MS);
+      } else {
+        tr.classList.add('vis'); // past the cap: apply immediately, no timer scheduled
+      }
+    });
   }
 
-  item.addEventListener('click', toggle);
-  item.addEventListener('keydown', e => {
-    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); }
-  });
-  slEl.appendChild(item);
-});
+  return { revealRows, reducedMotion };
+})();
 
-document.getElementById('btn-all').addEventListener('click', () => {
-  KNOWN_STYLES.forEach(s => {
-    selStyles.add(s);
-    const el = slEl.querySelector(`[data-style="${s}"]`);
-    el.classList.add('on');
-    el.setAttribute('aria-checked', 'true');
-  });
-  exBtn.disabled = false;
-});
+/* ── Log ─────────────────────────────────────────────────────────────────── */
+const Log = (() => {
+  const el = document.getElementById('log');
+  const PROGRESS_RE = /^\s*\[\d+\/\d+\]\s*$/;
+  let progressNode = null; // repeated "[i/N]" lines update this node instead of piling up
 
-document.getElementById('btn-clr').addEventListener('click', () => {
-  selStyles.clear();
-  slEl.querySelectorAll('.si').forEach(el => {
-    el.classList.remove('on');
-    el.setAttribute('aria-checked', 'false');
-  });
-  exBtn.disabled = true;
-});
+  function print(text, cls = '') {
+    if (PROGRESS_RE.test(text || '')) {
+      if (!progressNode) {
+        progressNode = document.createElement('span');
+        progressNode.className = 'll';
+        el.appendChild(progressNode);
+      }
+      progressNode.textContent = text;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    progressNode = null;
+    const line = document.createElement('span');
+    line.className = `ll${cls ? ' ' + cls : ''}`;
+    line.textContent = text || ' ';
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
 
-/* ── Log helpers ─────────────────────────────────────────────────────────── */
-const logEl = document.getElementById('log');
+  function clear() {
+    el.innerHTML = '';
+    progressNode = null;
+  }
 
-function termPrint(text, cls = '') {
-  const line = document.createElement('span');
-  line.className = `ll${cls ? ' ' + cls : ''}`;
-  line.textContent = text || ' ';
-  logEl.appendChild(line);
-  logEl.scrollTop = logEl.scrollHeight;
-}
+  return { print, clear };
+})();
 
-function termClear() { logEl.innerHTML = ''; }
+/* ── Render ──────────────────────────────────────────────────────────────── */
+const Render = (() => {
+  function table(data, { animate = true } = {}) {
+    State.currentResults = data;
+    const body = document.getElementById('res-b');
+    body.innerHTML = '';
 
-/* ── Results table ───────────────────────────────────────────────────────── */
-let currentResults = [];
-let sortCol = 'title';
-let sortAsc  = true;
+    document.getElementById('empty').style.display = 'none';
+    document.getElementById('res-t').style.display  = '';
+    document.getElementById('res-ct').textContent    = `${data.length} release${data.length !== 1 ? 's' : ''}`;
+    document.getElementById('ep-json').disabled      = false;
+    document.getElementById('ep-csv').disabled       = false;
 
-function renderResults(data) {
-  currentResults = data;
-  const tbody = document.getElementById('res-b');
-  tbody.innerHTML = '';
+    const rows = data.map(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td title="${r.title}">${r.title}</td>
+        <td title="${r.artists}">${r.artists}</td>
+        <td title="${r.label}">${r.label}</td>
+        <td><span class="stamp">${r.sku}</span></td>
+        <td title="${r.styles}">${r.styles}</td>
+        <td>${r.format}</td>
+        <td>${r.price}</td>
+        <td><span class="stock"><span class="stock-dot ${r.in_stock ? 'on' : ''}"></span>${r.in_stock ? 'In stock' : 'Out of stock'}</span></td>
+        <td><a href="${r.url}" target="_blank" rel="noopener" title="${r.url}">↗</a></td>
+      `;
+      body.appendChild(tr);
+      return tr;
+    });
 
-  document.getElementById('empty').style.display  = 'none';
-  document.getElementById('res-t').style.display  = '';
-  document.getElementById('res-ct').textContent   = `${data.length} release${data.length !== 1 ? 's' : ''}`;
-  document.getElementById('ep-json').disabled     = false;
-  document.getElementById('ep-csv').disabled      = false;
+    if (animate) Motion.revealRows(rows);
+    else rows.forEach(tr => tr.classList.add('vis')); // sort re-render: repaint only, no re-fade
+  }
 
-  data.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td title="${r.title}">${r.title}</td>
-      <td title="${r.artists}">${r.artists}</td>
-      <td title="${r.label}">${r.label}</td>
-      <td title="${r.styles}">${r.styles}</td>
-      <td>${r.format}</td>
-      <td>${r.price}</td>
-      <td>${r.in_stock ? 'In stock' : 'Out of stock'}</td>
-      <td><a href="${r.url}" target="_blank" rel="noopener" title="${r.url}">↗</a></td>
-    `;
-    tbody.appendChild(tr);
-    setTimeout(() => tr.classList.add('vis'), i * 60);
-  });
-}
+  return { table };
+})();
 
 document.querySelectorAll('thead th[data-col]').forEach(th => {
   th.addEventListener('click', () => {
     const col = th.dataset.col;
-    if (sortCol === col) sortAsc = !sortAsc;
-    else { sortCol = col; sortAsc = true; }
+    if (State.sortCol === col) State.sortAsc = !State.sortAsc;
+    else { State.sortCol = col; State.sortAsc = true; }
 
     document.querySelectorAll('thead th').forEach(t => t.classList.remove('sorted', 'asc'));
     th.classList.add('sorted');
-    if (sortAsc) th.classList.add('asc');
+    if (State.sortAsc) th.classList.add('asc');
 
-    const sorted = [...currentResults].sort((a, b) => {
+    const sorted = [...State.currentResults].sort((a, b) => {
       const va = String(a[col] ?? '').toLowerCase();
       const vb = String(b[col] ?? '').toLowerCase();
-      return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      return State.sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
-    renderResults(sorted);
+    Render.table(sorted, { animate: false });
   });
 });
+
+/* ── Api ─────────────────────────────────────────────────────────────────── */
+const Api = (() => {
+  async function startScrape(styles, concurrency, recent, inStockOnly) {
+    const res = await fetch(`${CONFIG.API_BASE}/scrape`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ styles, concurrency, recent, in_stock_only: inStockOnly }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  function streamJob(jobId, { onMessage, onDone, onError }) {
+    const evtSource = new EventSource(`${CONFIG.API_BASE}/stream/${jobId}`);
+    evtSource.onmessage = e => onMessage(JSON.parse(e.data));
+    evtSource.addEventListener('done', () => { evtSource.close(); onDone(); });
+    evtSource.onerror = () => { evtSource.close(); onError(); };
+  }
+
+  async function getResults(jobId) {
+    const res = await fetch(`${CONFIG.API_BASE}/results/${jobId}`);
+    return res.json();
+  }
+
+  return { startScrape, streamJob, getResults };
+})();
+
+/* ── Style selector (built once the style list has loaded) ───────────────── */
+const exBtn = document.getElementById('ex-btn');
+const exBtnTxt = document.getElementById('ex-btn-txt');
+
+function buildStyleChecklist(styles) {
+  const slEl = document.getElementById('sl');
+
+  styles.forEach(style => {
+    const item = document.createElement('div');
+    item.className = 'si';
+    item.setAttribute('role', 'checkbox');
+    item.setAttribute('aria-checked', 'false');
+    item.setAttribute('tabindex', '0');
+    item.dataset.style = style;
+    item.innerHTML = `<span class="pip" aria-hidden="true"></span><span class="sn">${style}</span>`;
+
+    function toggle() {
+      if (State.selStyles.has(style)) {
+        State.selStyles.delete(style);
+        item.classList.remove('on');
+        item.setAttribute('aria-checked', 'false');
+      } else {
+        State.selStyles.add(style);
+        item.classList.add('on');
+        item.setAttribute('aria-checked', 'true');
+      }
+      exBtn.disabled = State.selStyles.size < 1;
+    }
+
+    item.addEventListener('click', toggle);
+    item.addEventListener('keydown', e => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); }
+    });
+    slEl.appendChild(item);
+  });
+
+  document.getElementById('btn-all').addEventListener('click', () => {
+    styles.forEach(s => {
+      State.selStyles.add(s);
+      const el = slEl.querySelector(`[data-style="${s}"]`);
+      el.classList.add('on');
+      el.setAttribute('aria-checked', 'true');
+    });
+    exBtn.disabled = false;
+  });
+
+  document.getElementById('btn-clr').addEventListener('click', () => {
+    State.selStyles.clear();
+    slEl.querySelectorAll('.si').forEach(el => {
+      el.classList.remove('on');
+      el.setAttribute('aria-checked', 'false');
+    });
+    exBtn.disabled = true;
+  });
+}
+
+function showDegraded(count) {
+  const el = document.getElementById('styles-degraded');
+  el.hidden = false;
+  el.textContent = `OFFLINE — ${count} fallback styles shown. Start the API and reload for the full list.`;
+}
 
 /* ── Execute ─────────────────────────────────────────────────────────────── */
 const stPip = document.getElementById('st-pip');
@@ -777,13 +781,13 @@ const stTxt = document.getElementById('st-txt');
 function setRunning(on) {
   if (on) {
     exBtn.disabled = true;
-    exBtn.textContent = 'running';
+    exBtnTxt.textContent = 'scanning';
     exBtn.classList.add('running');
     stPip.classList.add('on');
     stTxt.textContent = 'scanning';
   } else {
-    exBtn.disabled = selStyles.size < 1;
-    exBtn.textContent = 'execute';
+    exBtn.disabled = State.selStyles.size < 1;
+    exBtnTxt.textContent = 'execute';
     exBtn.classList.remove('running');
     stPip.classList.remove('on');
     stTxt.textContent = 'idle';
@@ -791,15 +795,15 @@ function setRunning(on) {
 }
 
 async function runScraper() {
-  const styles       = [...selStyles];
-  const concurrency  = parseInt(document.getElementById('cc-in').value, 10) || 10;
-  const recent       = document.getElementById('tg-recent').checked;
-  const inStockOnly  = document.getElementById('tg-instock').checked;
+  const styles      = [...State.selStyles];
+  const concurrency = parseInt(document.getElementById('cc-in').value, 10) || 10;
+  const recent      = document.getElementById('tg-recent').checked;
+  const inStockOnly = document.getElementById('tg-instock').checked;
 
-  termClear();
+  Log.clear();
   setRunning(true);
 
-  if (DEMO_MODE) {
+  if (CONFIG.DEMO_MODE) {
     await runDemo(styles, concurrency, recent, inStockOnly);
   } else {
     await runLive(styles, concurrency, recent, inStockOnly);
@@ -808,90 +812,80 @@ async function runScraper() {
   setRunning(false);
 }
 
-/* Demo mode — simulates a real scraper run for design preview */
+/* Demo mode — simulates a real scraper run for design preview, no backend needed */
 async function runDemo(styles, concurrency, recent = false, inStockOnly = false) {
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  termPrint(`Filtering for releases with ALL of: [${styles.join(', ')}]`, 'hi');
-  await delay(400);
-  termPrint('');
-  termPrint('Probing page counts—');
-  await delay(300);
+  Log.print(`Filtering for releases with ALL of: [${styles.join(', ')}]`, 'hi');
+  await delay(250);
+  Log.print('');
+  Log.print('Probing page counts—');
+  await delay(200);
 
   for (const s of styles) {
     const pages = Math.floor(Math.random() * 8) + 1;
-    termPrint(`  ${s}: ${pages} page${pages !== 1 ? 's' : ''}`);
-    await delay(120);
-  }
-
-  await delay(300);
-  const totalPages = styles.length * 4;
-  termPrint('');
-  termPrint(`Phase 1 — collecting URLs  (${totalPages} pages, concurrency=${concurrency})`);
-  for (let i = 1; i <= totalPages; i++) {
-    termPrint(`  [${i}/${totalPages}]`);
+    Log.print(`  ${s}: ${pages} page${pages !== 1 ? 's' : ''}`);
     await delay(80);
   }
 
-  termPrint('');
-  termPrint(`  URLs per style: { ${styles.map(s => `${s}: ${Math.floor(Math.random()*80)+20}`).join(', ')} }`);
-  await delay(300);
+  await delay(200);
+  const totalPages = styles.length * 4;
+  Log.print('');
+  Log.print(`Phase 1 — collecting URLs  (${totalPages} pages, concurrency=${concurrency})`);
+  for (let i = 1; i <= totalPages; i++) {
+    Log.print(`  [${i}/${totalPages}]`);
+    await delay(40);
+  }
+
+  Log.print('');
+  Log.print(`  URLs per style: { ${styles.map(s => `${s}: ${Math.floor(Math.random()*80)+20}`).join(', ')} }`);
+  await delay(200);
 
   const count = Math.floor(Math.random() * 6) + 1;
-  termPrint(`  Intersection: ${count} release${count !== 1 ? 's' : ''}`, 'hi');
-  await delay(300);
-  termPrint('');
-  termPrint(`Phase 2 — parsing ${count} matching card${count !== 1 ? 's' : ''}`);
-  await delay(500);
-  termPrint('');
-  termPrint(`─`.repeat(40), 'dim');
-  termPrint(`Total unique matching releases: ${count}`, 'hi');
+  Log.print(`  Intersection: ${count} release${count !== 1 ? 's' : ''}`, 'hi');
+  await delay(200);
+  Log.print('');
+  Log.print(`Phase 2 — parsing ${count} matching card${count !== 1 ? 's' : ''}`);
+  await delay(350);
+  Log.print('');
+  Log.print(`─`.repeat(40), 'dim');
+  Log.print(`Total unique matching releases: ${count}`, 'hi');
 
   let demoResults = Array.from({ length: count }, (_, i) => ({
-    title:   `Release ${String.fromCharCode(65 + i)} — ${styles[0]} Edition`,
-    url:     `https://yoyaku.io/style/${styles[0].toLowerCase().replace(/\s+/g, '-')}/`,
-    artists: i % 2 === 0 ? 'Artist Alpha' : 'Artist Beta, Artist Gamma',
-    label:   ['Tresor', 'Ostgut Ton', 'Mule Musiq', 'Compost'][i % 4],
-    sku:     `SKU-${1000 + i}`,
-    styles:  styles.slice(0, 2).join(', '),
-    format:  ['12"', '2×12"', '10"'][i % 3],
-    price:   `€${(10 + i * 2.5).toFixed(2)}`,
+    title:    `Release ${String.fromCharCode(65 + i)} — ${styles[0]} Edition`,
+    url:      `https://yoyaku.io/style/${styles[0].toLowerCase().replace(/\s+/g, '-')}/`,
+    artists:  i % 2 === 0 ? 'Artist Alpha' : 'Artist Beta, Artist Gamma',
+    label:    ['Tresor', 'Ostgut Ton', 'Mule Musiq', 'Compost'][i % 4],
+    sku:      `SKU-${1000 + i}`,
+    styles:   styles.slice(0, 2).join(', '),
+    format:   ['12"', '2×12"', '10"'][i % 3],
+    price:    `€${(10 + i * 2.5).toFixed(2)}`,
     in_stock: i % 4 !== 0,
   }));
   if (inStockOnly) demoResults = demoResults.filter(r => r.in_stock);
 
-  renderResults(demoResults);
-  termPrint(`Saved: yoyaku_results.json`, 'dim');
-  termPrint(`Saved: yoyaku_results.csv`, 'dim');
+  Render.table(demoResults);
+  Log.print(`Saved: yoyaku_results.json`, 'dim');
+  Log.print(`Saved: yoyaku_results.csv`, 'dim');
 }
 
-/* Live mode — connects to FastAPI backend (Phase A) */
+/* Live mode — connects to the FastAPI backend via the Api module */
 async function runLive(styles, concurrency, recent = false, inStockOnly = false) {
   try {
-    const res = await fetch(`${API_BASE}/scrape`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ styles, concurrency, recent, in_stock_only: inStockOnly }),
-    });
-    if (!res.ok) { termPrint(`[error] HTTP ${res.status}`, 'err'); return; }
-    const { job_id } = await res.json();
+    const { job_id } = await Api.startScrape(styles, concurrency, recent, inStockOnly);
 
-    const evtSource = new EventSource(`${API_BASE}/stream/${job_id}`);
-    evtSource.onmessage = e => {
-      const { type, text } = JSON.parse(e.data);
-      termPrint(text, type === 'error' ? 'err' : type === 'hi' ? 'hi' : '');
-    };
-    evtSource.addEventListener('done', async () => {
-      evtSource.close();
-      const r = await fetch(`${API_BASE}/results/${job_id}`);
-      renderResults(await r.json());
+    await new Promise(resolve => {
+      Api.streamJob(job_id, {
+        onMessage: ({ type, text }) => Log.print(text, type === 'error' ? 'err' : type === 'hi' ? 'hi' : ''),
+        onDone: async () => {
+          Render.table(await Api.getResults(job_id));
+          resolve();
+        },
+        onError: () => { Log.print('Connection lost.', 'err'); resolve(); },
+      });
     });
-    evtSource.onerror = () => {
-      termPrint('Connection lost.', 'err');
-      evtSource.close();
-    };
   } catch (err) {
-    termPrint(`[error] ${err.message}`, 'err');
+    Log.print(`[error] ${err.message}`, 'err');
   }
 }
 
@@ -899,14 +893,14 @@ exBtn.addEventListener('click', runScraper);
 
 /* ── Export ──────────────────────────────────────────────────────────────── */
 document.getElementById('ep-json').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(currentResults, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(State.currentResults, null, 2)], { type: 'application/json' });
   triggerDownload(blob, 'yoyaku_results.json');
 });
 
 document.getElementById('ep-csv').addEventListener('click', () => {
-  if (!currentResults.length) return;
-  const keys = Object.keys(currentResults[0]).filter(k => k !== 'url');
-  const rows = [keys.join(','), ...currentResults.map(r =>
+  if (!State.currentResults.length) return;
+  const keys = Object.keys(State.currentResults[0]).filter(k => k !== 'url');
+  const rows = [keys.join(','), ...State.currentResults.map(r =>
     keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(',')
   )];
   const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
@@ -920,6 +914,13 @@ function triggerDownload(blob, filename) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+(async function init() {
+  const { styles, degraded } = await Styles.load();
+  buildStyleChecklist(styles);
+  if (degraded) showDegraded(styles.length);
+})();
 </script>
 </body>
 </html>

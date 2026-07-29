@@ -2,7 +2,8 @@
 FastAPI backend for the Yoyaku scraper.
 
 Endpoints:
-  POST /scrape            {styles, concurrency} → {job_id}
+  GET  /styles            KNOWN_STYLES as a bare JSON array
+  POST /scrape            {styles, concurrency, recent, in_stock_only} → {job_id}
   GET  /stream/{job_id}   SSE log stream, terminated by a "done" event
   GET  /results/{job_id}  Release[] JSON once the job is complete
 
@@ -21,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from yoyaku_scraper import run_scraper
+from yoyaku_scraper import KNOWN_STYLES, run_scraper
 
 app = FastAPI()
 
@@ -35,6 +36,11 @@ app.add_middleware(
 # In-memory job store.
 # {job_id: {"queue": asyncio.Queue, "results": list | None, "error": str | None}}
 _jobs: dict[str, dict] = {}
+
+
+@app.get("/styles")
+async def get_styles() -> list[str]:
+    return KNOWN_STYLES
 
 
 class ScrapeRequest(BaseModel):
