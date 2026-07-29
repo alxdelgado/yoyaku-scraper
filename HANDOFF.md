@@ -6,9 +6,11 @@ Full context for the scraper, its architecture, the frontend, and everything nee
 
 ## What the project does
 
-**yoyaku-scraper** is a vinyl release discovery tool. It scrapes [yoyaku.io](https://yoyaku.io) — a WooCommerce-based record store — and returns every release whose style tags contain **all** of the requested genres simultaneously. The intersection result is written to `yoyaku_results.json` and `yoyaku_results.csv`, and surfaced in a browser UI.
+**yoyaku-scraper** is a vinyl release discovery tool. It scrapes [yoyaku.io](https://yoyaku.io) — a WooCommerce-based record store — and returns every release whose style tags contain **all** of the requested genres simultaneously. Each result also carries its live stock status, and can be narrowed to yoyaku.io's own "Arrivals" category. The intersection result is written to `yoyaku_results.json` and `yoyaku_results.csv`, and surfaced in a browser UI backed by a FastAPI service.
 
 Default filter: **Deep House + Techno + Tech House** (all three must be present).
+
+Public-facing docs live in `README.md` (GitHub landing page) and `yoyaku_scraper.md` (CLI reference) — this file is the internal continuation log: architectural decisions, why things are built the way they are, and what's still open.
 
 ---
 
@@ -17,11 +19,16 @@ Default filter: **Deep House + Techno + Tech House** (all three must be present)
 | File | Purpose |
 |---|---|
 | `yoyaku_scraper.py` | Core scraper (async, two-phase, Cloudflare-bypassing) |
-| `yoyaku_scraper.md` | End-user documentation (usage, style names, output format) |
+| `api.py` | FastAPI backend wrapping `run_scraper()` — job queue + SSE log streaming |
+| `README.md` | GitHub-facing overview: features, usage, output schema, architecture |
+| `yoyaku_scraper.md` | End-user CLI documentation (usage, style names, output format) |
+| `july_updates.md` | Changelog for the in-stock tagging + recent-arrivals feature |
 | `frontend/index.html` | Self-contained browser UI — demo mode + live API wiring |
 | `tests/test_scraper.py` | Unit tests for all pure/near-pure scraper functions |
+| `tests/test_api.py` | Unit tests for the FastAPI backend (job lifecycle, SSE, isolation) |
 | `HANDOFF.md` | This file |
 | `REVIEW_TASKS.md` | Completed engineering review list (all 7 tasks done) |
+| `high-severity-fixes.md` | Fix log for the FastAPI backend's initial high-severity bugs |
 | `.gitignore` | Excludes `yoyaku_results.*`, `__pycache__`, `.cf_session/` |
 
 Output artefacts (`yoyaku_results.json`, `yoyaku_results.csv`) are local-only — not committed.
@@ -31,7 +38,14 @@ Output artefacts (`yoyaku_results.json`, `yoyaku_results.csv`) are local-only �
 ## Dependencies
 
 ```bash
-pip install curl-cffi beautifulsoup4 lxml pytest
+# Core scraper
+pip install curl-cffi beautifulsoup4 lxml
+
+# API backend
+pip install fastapi uvicorn
+
+# Tests
+pip install pytest pytest-asyncio httpx
 ```
 
 Python 3.10+ required (structural pattern matching, `dataclass`). No browser installation needed.
@@ -73,6 +87,13 @@ Naively parsing all cards and filtering wastes ~98% of DOM work (1,600 cards for
 | `CONCURRENCY` | `10` | Default; overridden at runtime by `-j` |
 | `BASE_URL` | `"https://yoyaku.io"` | Change if site moves |
 | `IMPERSONATE_BROWSER` | `"chrome120"` | curl-cffi TLS target — upgrade if CF tightens |
+| `SLUG_PATH_OVERRIDES` | `{"arrivals": "category"}` | Routes the reserved `"arrivals"` slug to `/category/` instead of `/style/` — see below |
+
+### Arrivals as a pseudo-style
+
+yoyaku.io maintains its own "Arrivals" listing at `/category/arrivals/`, which uses byte-for-byte the same card markup and pagination as a `/style/{slug}/` page. Rather than adding a parallel code path for it, `run_scraper(recent=True)` just adds `"Arrivals"` into `required_styles` before slugs are built — `style_to_slug("Arrivals")` naturally resolves to `"arrivals"`, and `SLUG_PATH_OVERRIDES` routes that one slug to `/category/` instead of `/style/`. Every other part of the two-phase pipeline (probing, URL collection, intersection, caching) treats it as just another source to intersect. `_page_urls()` is the single source of truth for this routing — `probe_style()` calls `_page_urls(slug, 1)[0]` rather than rebuilding the URL itself, so there's nowhere for the two to drift apart.
+
+This is why `--recent` costs nothing extra over a normal multi-style run: no per-release page fetch, no date parsing. It also means recency is *scoped to yoyaku.io's own curation window* for the Arrivals category, not an exact day-count — an exact `--added-since N days` cutoff was considered (it would require fetching each release's own page for its `datePublished` JSON-LD) and deliberately declined in favor of this zero-cost approach.
 
 ### CSS selectors (all centralised)
 
@@ -103,25 +124,44 @@ def style_to_slug(label: str) -> str:
 
 `"Deep House"` → `"deep-house"` → `https://yoyaku.io/style/deep-house/`
 
-If a style name doesn't map to a real page, `probe_style` returns `0` and that style is skipped with a warning.
+If a style name doesn't map to a real page, `probe_style` returns `0` and that style is skipped with a warning. If `recent=True` and the `"arrivals"` slug itself fails to probe, `run_scraper` logs an explicit `"err"`-typed warning (`Arrivals category unreachable — results are not filtered by recency`) rather than silently returning an unfiltered result — a real recency claim should never look identical to a network failure.
+
+`"Arrivals"` is a reserved pseudo-style name — typing it as a literal CLI/API style argument has the same effect as `--recent`/`recent=True`, since it resolves to the same slug. This isn't documented as a supported entry point (the frontend only exposes it via the toggle), just a side effect of the routing design worth knowing about if a raw style list is ever accepted from an untrusted source.
+
+### In-stock detection
+
+`Release.in_stock` is read straight off the listing card's own class list — `"outofstock" not in card.get("class", [])` in `_parse_card()` — during the same Phase 2 parse that already extracts title/artists/price/etc. No new selector, no new request. Two things worth remembering if this ever needs debugging:
+
+- There's an unrelated WooCommerce **taxonomy** class, `product_cat-out-of-stock`, which is a manually-assigned category tag, not the real stock status. Only the bare `outofstock` token (no `product_cat-` prefix) means anything here.
+- A card with *neither* `instock` nor `outofstock` present is currently classified `in_stock=True` (absence of the negative token, not presence of the positive one) — this is exercised explicitly by `test_in_stock_defaults_true_when_no_stock_class_present` in `tests/test_scraper.py` so it stays a documented default rather than an accidental one.
+
+**If a user reports a release showing in-stock when the site "looks" out of stock:** check the *specific* card on the *specific* listing page(s) the query actually parsed from (Phase 2 only reads the smallest source's cached pages) — not just the product detail page, which usually agrees but is a different DOM. A release's own product page also renders "Related products" / "You may also like" / "More items from {label}" sections further down, which are full `li.product` cards for *other* releases and can carry their own out-of-stock badges — easy to mistake for the main release's status when skimming the page. The reliable check on a product page itself is the schema.org JSON-LD (`"availability":"http://schema.org/InStock"`) or whether the button reads "Add to cart" (in stock) vs "Read more" (out of stock), not just eyeballing badges nearby.
 
 ---
 
 ## Test suite
 
-`tests/test_scraper.py` covers all pure and near-pure functions.
+85 tests total across both files. Run everything with `pytest tests/ -v`.
+
+### `tests/test_scraper.py` — pure and near-pure scraper functions
 
 | Class | Function tested | Cases |
 |---|---|---|
 | `TestParseStyles` | `parse_styles` | greedy multi-word matching, unknown passthrough, case-insensitive, empty |
 | `TestStyleToSlug` | `style_to_slug` | hyphens, acronyms, spaces, whitespace edge cases |
 | `TestText` | `_text` | None, plain text, whitespace collapse, nested children |
-| `TestPageUrls` | `_page_urls` | page-1 bare URL quirk, subsequent pages, total count |
-| `TestParseCard` | `_parse_card` | all fields, multi-artist, soup immutability (T1 regression guard) |
-
-Run with: `pytest tests/test_scraper.py -v`
+| `TestPageUrls` | `_page_urls` | page-1 bare URL quirk, subsequent pages, total count, Arrivals→`/category/` routing |
+| `TestParseCard` | `_parse_card` | all fields, multi-artist, soup immutability (T1 regression guard), in-stock true/false/absent |
 
 The soup immutability test (`test_soup_not_mutated_after_parse`) is a regression guard for Task 1 — it ensures `_parse_card` operates on a deep copy so the original card DOM is never destroyed.
+
+`make_card()` takes a `stock_class` param (default `"instock"`) to drive the in-stock test cases without touching the ~15 pre-existing `TestParseCard` tests.
+
+### `tests/test_api.py` — FastAPI backend
+
+Covers `POST /scrape` (job creation, validation, concurrency/recent/in_stock_only forwarding), `GET /stream/{id}` (SSE framing, message types, done-event termination), `GET /results/{id}` (ready/running/errored states), and job isolation across concurrent requests.
+
+Every hand-written fake `run_scraper` replacement in this file has to accept `recent` and `in_stock_only` keyword args (with defaults) to match the real signature — if `run_scraper()`'s parameters change again, these fakes need updating in lockstep or `_run_job`'s call raises `TypeError` inside the background task (which the tests would then just see as a job that errors, not an obvious signature mismatch).
 
 ---
 
@@ -171,36 +211,31 @@ Inspired by [immeasurable.com](https://www.immeasurable.com/) — typographic re
 
 The UI has two modes controlled by `DEMO_MODE` at the top of the script block:
 
-**`DEMO_MODE = true`** — `runDemo()` simulates a full scraper run in the browser with staged delays. No backend needed. Good for design review and demos.
+**`DEMO_MODE = true`** — `runDemo()` simulates a full scraper run in the browser with staged delays. No backend needed. Good for design review and demos. Its fake result generator also fabricates an `in_stock` value (`i % 4 !== 0`) so demo mode still exercises the Stock column and the `--in-stock-only`-equivalent toggle.
 
-**`DEMO_MODE = false`** — `runLive()` calls the FastAPI backend at `API_BASE = 'http://localhost:8000'`. Expects:
-- `POST /scrape` — body: `{ styles: string[], concurrency: number }` → returns `{ job_id: string }`
+**`DEMO_MODE = false`** — `runLive()` calls the FastAPI backend (`api.py`) at `API_BASE = 'http://localhost:8000'`:
+- `POST /scrape` — body: `{ styles: string[], concurrency: number, recent: boolean, in_stock_only: boolean }` → returns `{ job_id: string }`
 - `GET /stream/{job_id}` — SSE stream of `{ type: "hi"|"err"|"", text: string }` events, terminated by a `done` event
-- `GET /results/{job_id}` — returns the full `Release[]` JSON array
+- `GET /results/{job_id}` — returns the full `Release[]` JSON array, now including `in_stock`
 
-### What the frontend does NOT have yet
+Two checkboxes (`#tg-recent`, `#tg-instock`) sit below the style list and feed straight into the `runScraper()` → `runLive()`/`runDemo()` call chain. Neither affects `exBtn.disabled`, which stays gated purely on `selStyles.size < 1` — recency/stock filtering is additive, not a replacement for style selection.
 
-- The FastAPI backend (`api.py` or similar) that `runLive` connects to does not exist yet
-- The scraper currently writes to disk; the backend would need to run it in a subprocess or refactor `main()` to return results instead of writing files
+### Two latent bugs fixed when the Stock column was added
+
+Both were pre-existing traps that a boolean column happened to walk into, not new bugs introduced by the feature:
+
+- **CSV export** (`triggerDownload` handler for `ep-csv`): was `r[k] || ''`, which collapses JS `false` to an empty string — an out-of-stock release's CSV cell would render blank instead of `"False"`. Fixed to `String(r[k] ?? '')`.
+- **Column sort comparator**: was `(a[col] || '').toLowerCase()`, which throws `TypeError` on a boolean (`true.toLowerCase` doesn't exist). Fixed to `String(a[col] ?? '').toLowerCase()`. Worth remembering if another non-string field gets added later — this comparator needs to keep coercing to string first.
 
 ---
 
 ## What's next
 
-### Immediate — FastAPI backend (Phase A)
+FastAPI backend (Phase A) is done — `api.py` exists, is wired to the frontend, and has full test coverage in `tests/test_api.py`. In-stock tagging and the `--recent` Arrivals filter (this session) are also done and pushed to `main`.
 
-Wire the existing scraper to the frontend via a small FastAPI app:
+### Potential improvements
 
-```
-api.py
-  POST /scrape        → spawn scraper job, return job_id
-  GET  /stream/{id}   → SSE stream of log lines
-  GET  /results/{id}  → return Release[] JSON
-```
-
-The scraper's `main()` already returns a `list[Release]` internally after Task 5's refactor — the backend just needs to capture that instead of letting `write_output()` handle it.
-
-### Potential improvements (from original HANDOFF)
+**Precise date-based recency** — `--recent` currently means "in yoyaku.io's own Arrivals category," not an exact day-count. An `--added-since N` cutoff using each release's `datePublished` (available via JSON-LD on the release's own page, confirmed present during this session's investigation) was scoped and explicitly declined in favor of the zero-extra-request Arrivals approach — revisit if exact-day precision becomes a real requirement, but it costs one HTTP request per matching release.
 
 **Result caching with TTL** — Inventory changes slowly (new arrivals once or twice a day). A 6-hour TTL on results would eliminate repeat scrapes entirely.
 
