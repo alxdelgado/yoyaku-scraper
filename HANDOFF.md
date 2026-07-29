@@ -1,6 +1,8 @@
 # Session Handoff — yoyaku-scraper
 
-Full context for the scraper, its architecture, the frontend, and everything needed to continue development without re-discovering prior decisions.
+Full context for the scraper and its FastAPI backend — architecture, decisions,
+and what's still open. Frontend-specific context lives in its own
+`frontend/HANDOFF.md` rather than here.
 
 ---
 
@@ -24,9 +26,10 @@ Public-facing docs live in `README.md` (GitHub landing page) and `yoyaku_scraper
 | `yoyaku_scraper.md` | End-user CLI documentation (usage, style names, output format) |
 | `july_updates.md` | Changelog for the in-stock tagging + recent-arrivals feature |
 | `frontend/index.html` | Self-contained browser UI — demo mode + live API wiring |
+| `frontend/HANDOFF.md` | Frontend-specific continuation log (design language, JS structure, open items) |
 | `tests/test_scraper.py` | Unit tests for all pure/near-pure scraper functions |
 | `tests/test_api.py` | Unit tests for the FastAPI backend (job lifecycle, SSE, isolation) |
-| `HANDOFF.md` | This file |
+| `HANDOFF.md` | This file — scraper/backend context. See `frontend/HANDOFF.md` for the UI |
 | `REVIEW_TASKS.md` | Completed engineering review list (all 7 tasks done) |
 | `high-severity-fixes.md` | Fix log for the FastAPI backend's initial high-severity bugs |
 | `.gitignore` | Excludes `yoyaku_results.*`, `__pycache__`, `.cf_session/` |
@@ -141,7 +144,7 @@ If a style name doesn't map to a real page, `probe_style` returns `0` and that s
 
 ## Test suite
 
-85 tests total across both files. Run everything with `pytest tests/ -v`.
+88 tests total across both files. Run everything with `pytest tests/ -v`.
 
 ### `tests/test_scraper.py` — pure and near-pure scraper functions
 
@@ -159,7 +162,7 @@ The soup immutability test (`test_soup_not_mutated_after_parse`) is a regression
 
 ### `tests/test_api.py` — FastAPI backend
 
-Covers `POST /scrape` (job creation, validation, concurrency/recent/in_stock_only forwarding), `GET /stream/{id}` (SSE framing, message types, done-event termination), `GET /results/{id}` (ready/running/errored states), and job isolation across concurrent requests.
+Covers `GET /styles` (bare array, matches `KNOWN_STYLES` exactly, excludes the reserved `"Arrivals"` pseudo-style), `POST /scrape` (job creation, validation, concurrency/recent/in_stock_only forwarding), `GET /stream/{id}` (SSE framing, message types, done-event termination), `GET /results/{id}` (ready/running/errored states), and job isolation across concurrent requests.
 
 Every hand-written fake `run_scraper` replacement in this file has to accept `recent` and `in_stock_only` keyword args (with defaults) to match the real signature — if `run_scraper()`'s parameters change again, these fakes need updating in lockstep or `_run_job`'s call raises `TypeError` inside the background task (which the tests would then just see as a job that errors, not an obvious signature mismatch).
 
@@ -183,49 +186,14 @@ All 7 tasks from the code review are done.
 
 ## Frontend
 
-`frontend/index.html` is a self-contained, zero-dependency browser UI. No build step.
-
-### Design language
-
-Inspired by [immeasurable.com](https://www.immeasurable.com/) — typographic restraint, whitespace as the dominant element, mystery through subtraction.
-
-- **Background:** `#0b0b09` warm near-black (not pure digital black)
-- **Foreground:** `#e6dece` warm cream through five opacity stops — hierarchy without hue changes
-- **Serif:** Cormorant Garamond 300 — brand wordmark only
-- **Mono:** DM Mono 300 — all labels, data, log output
-- **Texture:** All 20 genre names repeat across 14 rows behind the main panel at 5% opacity — the raw material of the engine, rendered as paper
-- **Grain:** SVG `feTurbulence` noise at 2.8% opacity, no file dependency
-- **Cursor:** 1px crosshair (18px span each axis) — no pointer, no circle
-
-### Micro-expressions
-
-| Element | Rest | Hover | Active/Selected |
-|---|---|---|---|
-| Style items | `opacity: 0.4` | `0.72` + hairline underline draws across name | `1.0` + 3px dot appears (spring bounce) |
-| `execute` button | `opacity: 0.2`, italic serif | `0.88` + underline draws in over 0.6s | breathes `0.3↔0.6` while running |
-| Log lines | — | — | fade in from `translateY(4px)`, 0.65s |
-| Table rows | — | `background: rgba(paper, 0.022)` | stagger in at 60ms increments |
-| App shell | `opacity: 0` | — | fades to 1 over 1.4s on load |
-
-### Functional wiring
-
-The UI has two modes controlled by `DEMO_MODE` at the top of the script block:
-
-**`DEMO_MODE = true`** — `runDemo()` simulates a full scraper run in the browser with staged delays. No backend needed. Good for design review and demos. Its fake result generator also fabricates an `in_stock` value (`i % 4 !== 0`) so demo mode still exercises the Stock column and the `--in-stock-only`-equivalent toggle.
-
-**`DEMO_MODE = false`** — `runLive()` calls the FastAPI backend (`api.py`) at `API_BASE = 'http://localhost:8000'`:
-- `POST /scrape` — body: `{ styles: string[], concurrency: number, recent: boolean, in_stock_only: boolean }` → returns `{ job_id: string }`
-- `GET /stream/{job_id}` — SSE stream of `{ type: "hi"|"err"|"", text: string }` events, terminated by a `done` event
-- `GET /results/{job_id}` — returns the full `Release[]` JSON array, now including `in_stock`
-
-Two checkboxes (`#tg-recent`, `#tg-instock`) sit below the style list and feed straight into the `runScraper()` → `runLive()`/`runDemo()` call chain. Neither affects `exBtn.disabled`, which stays gated purely on `selStyles.size < 1` — recency/stock filtering is additive, not a replacement for style selection.
-
-### Two latent bugs fixed when the Stock column was added
-
-Both were pre-existing traps that a boolean column happened to walk into, not new bugs introduced by the feature:
-
-- **CSV export** (`triggerDownload` handler for `ep-csv`): was `r[k] || ''`, which collapses JS `false` to an empty string — an out-of-stock release's CSV cell would render blank instead of `"False"`. Fixed to `String(r[k] ?? '')`.
-- **Column sort comparator**: was `(a[col] || '').toLowerCase()`, which throws `TypeError` on a boolean (`true.toLowerCase` doesn't exist). Fixed to `String(a[col] ?? '').toLowerCase()`. Worth remembering if another non-string field gets added later — this comparator needs to keep coercing to string first.
+`frontend/index.html` is a self-contained, zero-dependency browser UI (no build
+step). It has its own **`frontend/HANDOFF.md`** now — frontend design language,
+technical structure, and open items live there, not here, so the two contexts
+don't get tangled as both grow. Backend-relevant surface worth knowing about
+from this side: `api.py` exposes `GET /styles` (returns `KNOWN_STYLES` verbatim,
+bare array) specifically so the frontend never has to hardcode its own copy of
+the style list again — added during the frontend redesign, but it's a backend
+endpoint, hence noted here too.
 
 ---
 
